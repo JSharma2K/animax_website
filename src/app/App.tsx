@@ -1,7 +1,23 @@
 import { motion, useScroll, useTransform } from 'motion/react';
 import { Play, CheckCircle2, Activity, Users2, Dumbbell, ArrowRight, PhoneCall, ShieldCheck } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { getCalApi } from '@calcom/embed-react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
+
+const calLink = normalizeCalLink(import.meta.env.VITE_CAL_LINK);
+const calConfig = JSON.stringify({ layout: 'month_view', theme: 'dark' });
+
+function normalizeCalLink(value?: string) {
+  if (!value) {
+    return '';
+  }
+
+  return value
+    .trim()
+    .replace(/^https?:\/\/(www\.)?cal\.com\//, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
+}
 
 export default function App() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -13,6 +29,35 @@ export default function App() {
 
   const y1 = useTransform(scrollYProgress, [0, 1], [0, 200]);
   const opacity1 = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+  const bookingButtonProps = calLink
+    ? {
+        'data-cal-link': calLink,
+        'data-cal-config': calConfig,
+      }
+    : {
+        onClick: () => window.open('https://cal.com', '_blank', 'noopener,noreferrer'),
+      };
+
+  useEffect(() => {
+    if (!calLink) {
+      console.warn('VITE_CAL_LINK is not configured. Book-call buttons will open Cal.com.');
+      return;
+    }
+
+    (async () => {
+      const cal = await getCalApi();
+      cal('preload', { calLink });
+      cal('ui', {
+        theme: 'dark',
+        layout: 'month_view',
+        styles: {
+          branding: {
+            brandColor: '#10b981',
+          },
+        },
+      });
+    })();
+  }, []);
 
   const features = [
     {
@@ -62,7 +107,7 @@ export default function App() {
             ))}
           </div>
 
-          <button className="bg-emerald-500 text-black px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 hover:bg-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all duration-300">
+          <button {...bookingButtonProps} className="bg-emerald-500 text-black px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 hover:bg-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all duration-300">
             Book Free Call
           </button>
         </div>
@@ -113,7 +158,7 @@ export default function App() {
               transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
               className="flex justify-center"
             >
-              <button className="flex items-center gap-3 bg-emerald-500 text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-emerald-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+              <button {...bookingButtonProps} className="flex items-center gap-3 bg-emerald-500 text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-emerald-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)]">
                 <PhoneCall className="w-5 h-5" /> Book Your Free Call
               </button>
             </motion.div>
@@ -231,7 +276,7 @@ export default function App() {
                     <h3 className="text-3xl font-bold mb-4 text-white">{feature.title}</h3>
                     <p className="text-zinc-400 text-lg leading-relaxed mb-8">{feature.description}</p>
                     
-                    <button className="inline-flex items-center gap-2 text-emerald-400 font-bold hover:text-emerald-300 transition-colors self-start mt-auto">
+                    <button {...(idx === 1 ? bookingButtonProps : {})} className="inline-flex items-center gap-2 text-emerald-400 font-bold hover:text-emerald-300 transition-colors self-start mt-auto">
                       {idx === 0 ? "Join the Community" : "Claim Your Guarantee"} <ArrowRight className="w-5 h-5" />
                     </button>
                   </div>
@@ -279,7 +324,7 @@ export default function App() {
                 </div>
 
                 <div className="pt-8">
-                  <button className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-zinc-200 transition-colors">
+                  <button {...bookingButtonProps} className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-zinc-200 transition-colors">
                     <PhoneCall className="w-5 h-5" /> Book a Free Consultation
                   </button>
                 </div>
@@ -331,7 +376,7 @@ export default function App() {
             <h2 className="text-5xl md:text-7xl font-bold tracking-tighter mb-8">Ready to start your transformation?</h2>
             <p className="text-2xl text-zinc-400 mb-12 max-w-2xl mx-auto">Join thousands of members who have changed their lives with Animax. 100% money back guarantee.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-500 text-black px-10 py-5 rounded-full font-bold text-xl hover:scale-105 hover:bg-emerald-400 transition-all duration-300 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+              <button {...bookingButtonProps} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-500 text-black px-10 py-5 rounded-full font-bold text-xl hover:scale-105 hover:bg-emerald-400 transition-all duration-300 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
                 <PhoneCall className="w-6 h-6" /> Book a Free Call
               </button>
               <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-transparent text-white border border-white/20 px-10 py-5 rounded-full font-bold text-xl hover:bg-white/5 transition-all duration-300">
