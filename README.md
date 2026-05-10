@@ -11,12 +11,12 @@ Run `npm run dev` to start the development server.
 
 ## Booking and lead capture
 
-The site uses Cal.com for booking and HubSpot as the lead CRM.
+The site uses Calendly for booking and HubSpot as the lead CRM.
 
 Required environment variables:
 
 ```bash
-VITE_CAL_LINK=your-cal-username/free-call
+VITE_CAL_LINK=https://calendly.com/animaxcoaching/free-call
 HUBSPOT_PRIVATE_APP_TOKEN=pat-na1-example
 CAL_WEBHOOK_SECRET=replace-with-a-random-shared-secret
 ```
@@ -45,10 +45,10 @@ animax_utm_medium
 animax_utm_campaign
 ```
 
-Cal.com webhook URL after Vercel deployment:
+Calendly webhook URL after Vercel deployment:
 
 ```text
-https://YOUR-VERCEL-DOMAIN/api/webhooks/cal
+https://YOUR-VERCEL-DOMAIN/api/webhooks/calendly
 ```
 
-Enable Cal.com webhook events for booking created, booking rescheduled, and booking cancelled.
+Enable Calendly webhook events for invitee created and invitee canceled.

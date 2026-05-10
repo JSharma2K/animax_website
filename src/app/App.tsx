@@ -1,23 +1,17 @@
 import { motion, useScroll, useTransform } from 'motion/react';
 import { Play, CheckCircle2, Activity, Users2, Dumbbell, ArrowRight, PhoneCall, ShieldCheck } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
-import { getCalApi } from '@calcom/embed-react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 
-const calLink = normalizeCalLink(import.meta.env.VITE_CAL_LINK);
-const calConfig = JSON.stringify({ layout: 'month_view', theme: 'dark' });
-
-function normalizeCalLink(value?: string) {
-  if (!value) {
-    return '';
+declare global {
+  interface Window {
+    Calendly?: {
+      initPopupWidget: (options: { url: string }) => void;
+    };
   }
-
-  return value
-    .trim()
-    .replace(/^https?:\/\/(www\.)?cal\.com\//, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
 }
+
+const bookingUrl = normalizeBookingUrl(import.meta.env.VITE_CALENDLY_URL || import.meta.env.VITE_CAL_LINK);
 
 export default function App() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -29,34 +23,17 @@ export default function App() {
 
   const y1 = useTransform(scrollYProgress, [0, 1], [0, 200]);
   const opacity1 = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
-  const bookingButtonProps = calLink
-    ? {
-        'data-cal-link': calLink,
-        'data-cal-config': calConfig,
-      }
-    : {
-        onClick: () => window.open('https://cal.com', '_blank', 'noopener,noreferrer'),
-      };
+  const bookingButtonProps = {
+    onClick: openBookingPopup,
+  };
 
   useEffect(() => {
-    if (!calLink) {
-      console.warn('VITE_CAL_LINK is not configured. Book-call buttons will open Cal.com.');
+    if (!bookingUrl) {
+      console.warn('VITE_CAL_LINK or VITE_CALENDLY_URL is not configured.');
       return;
     }
 
-    (async () => {
-      const cal = await getCalApi();
-      cal('preload', { calLink });
-      cal('ui', {
-        theme: 'dark',
-        layout: 'month_view',
-        styles: {
-          branding: {
-            brandColor: '#10b981',
-          },
-        },
-      });
-    })();
+    loadCalendlyAssets();
   }, []);
 
   const features = [
@@ -413,4 +390,54 @@ export default function App() {
       `}} />
     </div>
   );
+}
+
+function normalizeBookingUrl(value?: string) {
+  const rawValue = value?.trim();
+
+  if (!rawValue) {
+    return '';
+  }
+
+  if (/^https?:\/\//.test(rawValue)) {
+    return rawValue;
+  }
+
+  if (rawValue.includes('calendly.com/')) {
+    return `https://${rawValue}`;
+  }
+
+  return `https://calendly.com/${rawValue.replace(/^\/+/, '')}`;
+}
+
+function loadCalendlyAssets() {
+  if (!document.querySelector('link[data-calendly-widget-css="true"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://assets.calendly.com/assets/external/widget.css';
+    link.setAttribute('data-calendly-widget-css', 'true');
+    document.head.appendChild(link);
+  }
+
+  if (!document.querySelector('script[data-calendly-widget-js="true"]')) {
+    const script = document.createElement('script');
+    script.src = 'https://assets.calendly.com/assets/external/widget.js';
+    script.async = true;
+    script.setAttribute('data-calendly-widget-js', 'true');
+    document.body.appendChild(script);
+  }
+}
+
+function openBookingPopup() {
+  if (!bookingUrl) {
+    window.open('https://calendly.com/animaxcoaching/free-call', '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  if (window.Calendly) {
+    window.Calendly.initPopupWidget({ url: bookingUrl });
+    return;
+  }
+
+  window.open(bookingUrl, '_blank', 'noopener,noreferrer');
 }
