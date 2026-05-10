@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { readRawBody, sendJson } from '../_lib/http';
-import { upsertHubSpotContact } from '../_lib/hubspot';
+import { readRawBody, sendJson } from '../_lib/http.js';
+import { upsertHubSpotContact } from '../_lib/hubspot.js';
 
 const HANDLED_EVENTS = new Set([
   'invitee.created',
@@ -132,4 +132,3 @@ function answerValue(questionsAndAnswers: Array<Record<string, unknown>>, labels
 function cleanString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
-

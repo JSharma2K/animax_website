@@ -1,5 +1,5 @@
-import { readJsonBody, sendJson } from '../_lib/http';
-import { upsertHubSpotContact } from '../_lib/hubspot';
+import { readJsonBody, sendJson } from '../_lib/http.js';
+import { upsertHubSpotContact } from '../_lib/hubspot.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -53,4 +53,3 @@ function cleanString(value: unknown) {
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
-
