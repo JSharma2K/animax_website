@@ -31,6 +31,8 @@ export default async function handler(req: any, res: any) {
       name,
       email,
       phone: cleanString(body.phone),
+      age: cleanString(body.age),
+      gender: cleanString(body.gender),
       primaryGoal,
       notes: cleanString(body.notes),
       consentToContact,

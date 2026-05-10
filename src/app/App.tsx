@@ -1,7 +1,10 @@
-import { motion, useScroll, useTransform } from 'motion/react';
-import { Play, CheckCircle2, Activity, Users2, Dumbbell, ArrowRight, PhoneCall, ShieldCheck } from 'lucide-react';
+import { AnimatePresence, motion, useScroll, useTransform } from 'motion/react';
+import { Play, CheckCircle2, Users2, ArrowRight, PhoneCall, ShieldCheck, Menu, X, Target, CalendarCheck, Flame, TrendingUp } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
+import type { ComponentType } from 'react';
+import Lenis from 'lenis';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
+import animaxLogo from '../../assets/animax_logo_style_1.png';
 
 declare global {
   interface Window {
@@ -13,8 +16,32 @@ declare global {
 
 const bookingUrl = normalizeBookingUrl(import.meta.env.VITE_CALENDLY_URL || import.meta.env.VITE_CAL_LINK);
 
+const quizQuestions = [
+  'Do you feel your current routine is moving you toward the body you want?',
+  'Do you often restart after a few good days instead of staying consistent?',
+  'Would a clear plan make it easier for you to show up each week?',
+  'Are you ready to be coached instead of guessing what to do next?',
+];
+
+const initialQuizAnswers = {
+  age: '',
+  gender: '',
+  name: '',
+  email: '',
+  phone: '',
+  goal: '',
+  consent: false,
+  answers: quizQuestions.map(() => ''),
+};
+
 export default function App() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [quizStep, setQuizStep] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState(initialQuizAnswers);
+  const [quizState, setQuizState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -26,6 +53,13 @@ export default function App() {
   const bookingButtonProps = {
     onClick: openBookingPopup,
   };
+  const quizButtonProps = {
+    onClick: () => {
+      setQuizState('idle');
+      setQuizStep(0);
+      setIsQuizOpen(true);
+    },
+  };
 
   useEffect(() => {
     if (!bookingUrl) {
@@ -34,6 +68,62 @@ export default function App() {
     }
 
     loadCalendlyAssets();
+  }, []);
+
+  useEffect(() => {
+    let animationFrameId = 0;
+
+    const handleScroll = () => {
+      if (animationFrameId) {
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = 0;
+        setScrolled((current) => {
+          const scrollY = window.scrollY;
+          const next = current ? scrollY > 24 : scrollY > 72;
+          return current === next ? current : next;
+        });
+      });
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (scrolled) {
+      setMobileMenuOpen(false);
+    }
+  }, [scrolled]);
+
+  useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.15,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+      wheelMultiplier: 0.9,
+    });
+
+    let animationFrameId = 0;
+
+    const raf = (time: number) => {
+      lenis.raf(time);
+      animationFrameId = requestAnimationFrame(raf);
+    };
+
+    animationFrameId = requestAnimationFrame(raf);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      lenis.destroy();
+    };
   }, []);
 
   const features = [
@@ -50,66 +140,146 @@ export default function App() {
       img: "https://images.unsplash.com/photo-1695892046204-ec2962b26b48?auto=format&fit=crop&q=80&w=1080"
     }
   ];
+  const navItems = [
+    { name: 'How it works', href: '#video' },
+    { name: 'Coaching', href: '#coaching-options' },
+    { name: 'Results', href: '#results' }
+  ];
+  const resultCards = [
+    {
+      title: 'Consistency that sticks',
+      description: 'Weekly targets, coach check-ins, and habit loops that keep you moving after motivation dips.',
+      stat: '98%',
+      label: 'goal follow-through',
+      icon: CalendarCheck,
+    },
+    {
+      title: 'Stronger every block',
+      description: 'Your plan progresses with your body so training feels focused, measurable, and repeatable.',
+      stat: '12 wk',
+      label: 'guided roadmap',
+      icon: TrendingUp,
+    },
+    {
+      title: 'Built around your life',
+      description: 'Travel, busy weeks, missed sessions, equipment limits: your coach adjusts without derailing you.',
+      stat: '24/7',
+      label: 'coach support',
+      icon: Target,
+    },
+    {
+      title: 'Momentum you can feel',
+      description: 'Small wins compound into visible change, better energy, and confidence in how you train.',
+      stat: '500+',
+      label: 'member wins',
+      icon: Flame,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-50 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-x-hidden">
+    <div className="min-h-screen bg-black text-zinc-50 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-x-hidden">
       {/* Navigation */}
       <motion.nav
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="fixed top-0 w-full z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5"
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="fixed left-0 right-0 top-0 z-50 pointer-events-none"
       >
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer group">
-            <div className="bg-emerald-500/10 p-1.5 rounded-full border border-emerald-500/20 group-hover:bg-emerald-500/20 transition-colors">
-              <Activity className="w-5 h-5 text-emerald-400" />
-            </div>
-            <span className="text-xl font-bold tracking-tighter text-white">ANIMAX</span>
-          </div>
-          
-          <div className="hidden md:flex items-center gap-8">
-            {[
-              { name: 'How it works', href: '#how-it-works' },
-              { name: 'Coaching', href: '#coaches' },
-              { name: 'Results', href: '#reviews' }
-            ].map((item) => (
-              <a 
-                key={item.name} 
-                href={item.href} 
-                className="text-sm font-medium text-zinc-400 hover:text-emerald-400 transition-colors duration-300"
+        <div className={`mx-auto pl-2 pr-6 transition-[padding] duration-500 ease-out ${scrolled ? 'max-w-none py-1' : 'max-w-none py-2'}`}>
+          <div className="relative -translate-y-3 flex items-center justify-between">
+            <a
+              href="#"
+              className={`pointer-events-auto flex items-center group transition-all duration-300 ${
+                scrolled ? 'opacity-0 -translate-y-3 pointer-events-none' : 'opacity-100 translate-y-0'
+              }`}
+            >
+              <span className="block h-32 w-[204px] shrink-0 overflow-visible">
+                <img
+                  src={animaxLogo}
+                  alt="Animax Coaching"
+                  className="block h-full w-full object-contain transform-gpu"
+                  width={800}
+                  height={534}
+                  decoding="async"
+                />
+              </span>
+            </a>
+
+            <ul
+              className={`hidden md:flex items-center gap-8 text-xs uppercase tracking-[0.22em] leading-none transition-all duration-300 ${
+                scrolled ? 'opacity-0 -translate-y-3 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
+              }`}
+              style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 400 }}
+            >
+              {navItems.map((item) => (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className="text-white/60 hover:text-white transition-colors relative group"
+                  >
+                    {item.name}
+                    <span className="absolute -bottom-1 left-0 h-0.5 w-0 bg-gradient-to-r from-emerald-400 to-white/80 transition-all duration-300 group-hover:w-full" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+
+            <div className={`flex items-center gap-3 transition-all duration-300 ${
+              scrolled ? 'opacity-0 -translate-y-3 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
+            }`}>
+              <button {...bookingButtonProps} className="group hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400 transition-colors duration-300 hover:text-emerald-300 sm:flex">
+                Book Your Free Call
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 text-white transition-colors hover:text-emerald-300"
+                aria-label="Toggle navigation menu"
               >
-                {item.name}
-              </a>
-            ))}
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+            </div>
           </div>
 
-          <button {...bookingButtonProps} className="bg-emerald-500 text-black px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 hover:bg-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all duration-300">
-            Book Free Call
-          </button>
+          {mobileMenuOpen && !scrolled ? (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="pointer-events-auto mt-6 border-t border-white/10 pt-6 pb-6 md:hidden"
+            >
+              <ul className="space-y-4">
+                {navItems.map((item) => (
+                  <li key={item.name}>
+                    <a
+                      href={item.href}
+                      className="block py-2 text-sm uppercase tracking-[0.18em] text-white/80 transition-colors hover:text-white"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {item.name}
+                    </a>
+                  </li>
+                ))}
+                <li>
+                  <button {...bookingButtonProps} className="mt-2 flex w-full items-center justify-center gap-2 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-400 transition-colors hover:text-emerald-300">
+                    Book Your Free Call
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </li>
+              </ul>
+            </motion.div>
+          ) : null}
         </div>
       </motion.nav>
 
       <main ref={containerRef} className="relative">
         {/* Hero Section */}
-        <section className="relative pt-40 pb-20 px-6 min-h-[90vh] flex flex-col items-center">
+        <section className="relative pt-52 pb-20 px-6 min-h-[90vh] flex flex-col items-center">
           <motion.div 
             style={{ y: y1, opacity: opacity1 }}
             className="w-full max-w-5xl mx-auto text-center z-10"
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-sm font-medium mb-8"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              Elite Fitness Coaching
-            </motion.div>
-            
             <motion.h1 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -124,7 +294,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-              className="text-lg md:text-2xl text-zinc-400 max-w-2xl mx-auto mb-12 font-light leading-relaxed"
+              className="text-lg md:text-2xl text-zinc-400 max-w-2xl mx-auto mb-16 font-light leading-relaxed"
             >
               Work with an elite coaching team who builds your roadmap, tracks your progress, and guarantees your success.
             </motion.p>
@@ -133,20 +303,27 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-              className="flex justify-center"
+              className="relative flex justify-center"
             >
-              <button {...bookingButtonProps} className="flex items-center gap-3 bg-emerald-500 text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-emerald-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                <PhoneCall className="w-5 h-5" /> Book Your Free Call
-              </button>
+              <div className="flex flex-col items-center gap-2">
+                <button {...quizButtonProps} className="group flex items-center gap-3 text-lg font-bold uppercase tracking-[0.14em] text-emerald-400 transition-colors hover:text-emerald-300">
+                  Start Your Transformation
+                  <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+                </button>
+                <button {...quizButtonProps} className="text-sm font-semibold text-emerald-400 transition-colors hover:text-emerald-300">
+                  Take our quiz
+                </button>
+              </div>
             </motion.div>
           </motion.div>
 
           {/* Focal Promotional Video Section */}
           <motion.div
+            id="video"
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
-            className="w-full max-w-6xl mx-auto relative z-20 group cursor-pointer mt-16"
+            className="w-full max-w-6xl mx-auto relative z-20 group cursor-pointer mt-16 scroll-mt-28"
             onClick={() => setIsVideoPlaying(true)}
           >
             <div className="absolute -inset-1 bg-gradient-to-b from-emerald-500/20 to-transparent rounded-[2.5rem] blur-2xl opacity-50 group-hover:opacity-75 transition-opacity duration-700" />
@@ -158,7 +335,7 @@ export default function App() {
                     alt="Animax Video Thumbnail"
                     className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/20 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                   
                   {/* Play Button Overlay */}
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -200,26 +377,36 @@ export default function App() {
           </motion.div>
         </section>
 
-        {/* Stats Marquee Strip */}
-        <section className="border-y border-white/5 bg-zinc-900/30 overflow-hidden py-8">
-          <div className="flex gap-16 md:gap-32 px-6 items-center w-max animate-[marquee_40s_linear_infinite] opacity-70">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="flex gap-16 md:gap-32 items-center">
-                <div className="flex flex-col"><span className="text-3xl font-bold text-white">98%</span><span className="text-sm text-zinc-500 uppercase tracking-widest">Goal Achievement</span></div>
-                <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-                <div className="flex flex-col"><span className="text-3xl font-bold text-white">100%</span><span className="text-sm text-zinc-500 uppercase tracking-widest">Money Back Guarantee</span></div>
-                <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-                <div className="flex flex-col"><span className="text-3xl font-bold text-white">24/7</span><span className="text-sm text-zinc-500 uppercase tracking-widest">Coach Support</span></div>
-                <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-                <div className="flex flex-col"><span className="text-3xl font-bold text-white">500+</span><span className="text-sm text-zinc-500 uppercase tracking-widest">Success Stories</span></div>
-                <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+        {/* Results Section */}
+        <section id="results" className="relative overflow-hidden bg-black py-28 scroll-mt-28">
+          <div className="mx-auto mb-16 max-w-7xl px-6">
+            <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
+              <div>
+                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-400">Real coaching. Real momentum.</p>
+                <h2 className="text-5xl font-bold tracking-tighter text-white md:text-7xl">We get <span className="text-emerald-400 italic">results.</span></h2>
               </div>
-            ))}
+              <p className="max-w-2xl text-lg leading-relaxed text-zinc-400 md:text-xl">
+                The goal is not another plan sitting in your notes. It is a system that helps you train, adjust, and keep showing up until change becomes obvious.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6 [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+            <div className="flex w-max gap-6 animate-[results-marquee_36s_linear_infinite]">
+              {[...resultCards, ...resultCards].map((card, index) => (
+                <ResultCard key={`${card.title}-${index}`} card={card} />
+              ))}
+            </div>
+            <div className="flex w-max gap-6 animate-[results-marquee-reverse_40s_linear_infinite]">
+              {[...resultCards.slice().reverse(), ...resultCards.slice().reverse()].map((card, index) => (
+                <ResultCard key={`${card.title}-reverse-${index}`} card={card} compact />
+              ))}
+            </div>
           </div>
         </section>
 
         {/* What You Get Section */}
-        <section id="how-it-works" className="py-32 px-6 relative">
+        <section id="coaching-options" className="py-32 px-6 relative scroll-mt-28">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
           
           <div className="max-w-7xl mx-auto relative z-10">
@@ -260,83 +447,45 @@ export default function App() {
                 </motion.div>
               ))}
             </div>
-          </div>
-        </section>
 
-        {/* Deep Dive / Coaching Section */}
-        <section className="py-32 px-6 bg-zinc-900/30 border-y border-white/5 overflow-hidden">
-          <div className="max-w-7xl mx-auto">
-            <div className="grid lg:grid-cols-2 gap-16 items-center">
-              <motion.div
-                initial={{ opacity: 0, x: -40 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.8 }}
-                className="order-2 lg:order-1 space-y-8"
-              >
-                <h2 className="text-4xl md:text-6xl font-bold tracking-tighter">Expert guidance, <span className="text-emerald-400">every step of the way.</span></h2>
-                <p className="text-xl text-zinc-400">Your dedicated coach reviews your progress, adjusts your plan, and keeps you accountable. No more guessing—just guaranteed results.</p>
-                
-                <div className="space-y-6 pt-6">
+            <motion.div
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7 }}
+              className="mx-auto mt-16 max-w-6xl rounded-[2rem] border border-white/10 bg-zinc-950/80 p-8 shadow-2xl shadow-emerald-950/10 sm:p-10"
+            >
+              <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+                <div>
+                  <p className="mb-4 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-400">Not sure where to start?</p>
+                  <h3 className="mb-5 text-3xl font-bold tracking-tighter text-white md:text-5xl">Unsure? Book a free consultation.</h3>
+                  <p className="text-lg leading-relaxed text-zinc-400">
+                    Your dedicated coach reviews your progress, adjusts your plan, and keeps you accountable. No more guessing, just a clear next step.
+                  </p>
+                </div>
+
+                <div className="space-y-6">
                   {[
                     "Step-by-step guidance for every movement",
                     "Direct 24/7 access to your expert coach",
                     "Custom nutrition and macro planning",
                     "100% Money-back guarantee"
                   ].map((text, i) => (
-                    <motion.div 
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.1 }}
-                      className="flex items-start gap-4"
-                    >
-                      <div className="mt-1 bg-emerald-500/20 p-1.5 rounded-full">
-                        {i === 3 ? <ShieldCheck className="w-5 h-5 text-emerald-400" /> : <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+                    <div key={text} className="flex items-start gap-4">
+                      <div className="mt-1 rounded-full bg-emerald-500/20 p-1.5">
+                        {i === 3 ? <ShieldCheck className="h-5 w-5 text-emerald-400" /> : <CheckCircle2 className="h-5 w-5 text-emerald-400" />}
                       </div>
-                      <span className="text-lg text-zinc-300">{text}</span>
-                    </motion.div>
+                      <span className="text-base text-zinc-300 sm:text-lg">{text}</span>
+                    </div>
                   ))}
-                </div>
 
-                <div className="pt-8">
-                  <button {...bookingButtonProps} className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-zinc-200 transition-colors">
-                    <PhoneCall className="w-5 h-5" /> Book a Free Consultation
+                  <button {...bookingButtonProps} className="group inline-flex items-center gap-3 pt-2 text-sm font-bold uppercase tracking-[0.16em] text-emerald-400 transition-colors hover:text-emerald-300">
+                    Book a free consultation
+                    <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                   </button>
                 </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, x: 40 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.8 }}
-                className="order-1 lg:order-2 relative"
-              >
-                <div className="absolute inset-0 bg-emerald-500/20 blur-[100px] rounded-full" />
-                <div className="relative rounded-[2.5rem] bg-zinc-900 border border-white/10 p-4 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-700">
-                  <div className="rounded-[2rem] overflow-hidden bg-black aspect-[3/4] relative">
-                    <ImageWithFallback 
-                      src="https://images.unsplash.com/photo-1695892046204-ec2962b26b48?auto=format&fit=crop&q=80&w=1080" 
-                      alt="Coach Consultation"
-                      className="w-full h-full object-cover opacity-80"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-8">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-emerald-400 font-semibold tracking-wider uppercase text-sm">Elite Coach Match</span>
-                      </div>
-                      <div className="bg-white/10 backdrop-blur-md border border-white/20 p-5 rounded-2xl">
-                        <p className="text-base font-bold text-white mb-2">Coach Marcus</p>
-                        <p className="text-zinc-300 text-sm leading-relaxed">"I've built a custom 12-week roadmap specifically for your goals. We're going to transform your physique and build habits that last a lifetime. Let's get to work!"</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
+              </div>
+            </motion.div>
           </div>
         </section>
 
@@ -352,23 +501,27 @@ export default function App() {
             <ShieldCheck className="w-20 h-20 text-emerald-400 mx-auto mb-8" />
             <h2 className="text-5xl md:text-7xl font-bold tracking-tighter mb-8">Ready to start your transformation?</h2>
             <p className="text-2xl text-zinc-400 mb-12 max-w-2xl mx-auto">Join thousands of members who have changed their lives with Animax. 100% money back guarantee.</p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button {...bookingButtonProps} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-500 text-black px-10 py-5 rounded-full font-bold text-xl hover:scale-105 hover:bg-emerald-400 transition-all duration-300 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                <PhoneCall className="w-6 h-6" /> Book a Free Call
-              </button>
-              <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-transparent text-white border border-white/20 px-10 py-5 rounded-full font-bold text-xl hover:bg-white/5 transition-all duration-300">
-                <Users2 className="w-6 h-6" /> Join a Pod
+            <div className="flex items-center justify-center">
+              <button {...bookingButtonProps} className="group inline-flex items-center gap-3 text-lg font-bold uppercase tracking-[0.16em] text-emerald-400 transition-colors hover:text-emerald-300">
+                Book Your Free Call Now
+                <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
               </button>
             </div>
           </motion.div>
         </section>
 
         {/* Minimal Footer */}
-        <footer className="border-t border-white/5 py-12 px-6">
+        <footer className="py-12 px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-emerald-400" />
-              <span className="text-xl font-bold tracking-tighter text-white">ANIMAX</span>
+            <div className="flex items-center">
+              <img
+                src={animaxLogo}
+                alt="Animax Coaching"
+                className="h-32 w-[204px] object-contain"
+                width={800}
+                height={534}
+                decoding="async"
+              />
             </div>
             <div className="text-sm text-zinc-500">
               © 2026 Animax Coaching. All rights reserved.
@@ -387,8 +540,356 @@ export default function App() {
           0% { transform: translateX(0%); }
           100% { transform: translateX(-50%); }
         }
+        @keyframes results-marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(calc(-50% - 0.75rem)); }
+        }
+        @keyframes results-marquee-reverse {
+          0% { transform: translateX(calc(-50% - 0.75rem)); }
+          100% { transform: translateX(0); }
+        }
       `}} />
+
+      <TransformationQuiz
+        answers={quizAnswers}
+        isOpen={isQuizOpen}
+        state={quizState}
+        step={quizStep}
+        onAnswerChange={setQuizAnswers}
+        onClose={() => setIsQuizOpen(false)}
+        onNext={() => setQuizStep((step) => Math.min(step + 1, 2))}
+        onPrevious={() => setQuizStep((step) => Math.max(step - 1, 0))}
+        onSubmit={async () => {
+          setQuizState('submitting');
+
+          try {
+            const response = await fetch('/api/leads/interest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: quizAnswers.name,
+                email: quizAnswers.email,
+                phone: quizAnswers.phone,
+                primaryGoal: quizAnswers.goal,
+                age: quizAnswers.age,
+                gender: quizAnswers.gender,
+                notes: quizQuestions
+                  .map((question, index) => `${question} ${quizAnswers.answers[index] || 'Not answered'}`)
+                  .join('\n'),
+                consentToContact: quizAnswers.consent,
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error('Lead submission failed');
+            }
+
+            setQuizState('success');
+          } catch (error) {
+            console.error(error);
+            setQuizState('error');
+          }
+        }}
+      />
     </div>
+  );
+}
+
+function ResultCard({
+  card,
+  compact = false,
+}: {
+  card: {
+    title: string;
+    description: string;
+    stat: string;
+    label: string;
+    icon: ComponentType<{ className?: string }>;
+  };
+  compact?: boolean;
+}) {
+  const Icon = card.icon;
+
+  return (
+    <div className={`group relative flex shrink-0 overflow-hidden rounded-[1.75rem] border border-white/10 bg-zinc-950/90 p-6 shadow-2xl shadow-emerald-950/10 transition-colors hover:border-emerald-400/40 ${compact ? 'h-56 w-[22rem]' : 'h-64 w-[24rem]'}`}>
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-white/[0.03] opacity-70" />
+      <div className="relative z-10 flex h-full w-full flex-col justify-between">
+        <div className="flex items-start justify-between gap-5">
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+            <Icon className="h-6 w-6 text-emerald-400" />
+          </div>
+          <div className="text-right">
+            <div className="text-4xl font-black tracking-tighter text-white">{card.stat}</div>
+            <div className="mt-1 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-emerald-300">{card.label}</div>
+          </div>
+        </div>
+        <div>
+          <h3 className="mb-3 text-2xl font-bold tracking-tight text-white">{card.title}</h3>
+          <p className="text-sm leading-relaxed text-zinc-400">{card.description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type QuizAnswers = typeof initialQuizAnswers;
+
+function TransformationQuiz({
+  answers,
+  isOpen,
+  onAnswerChange,
+  onClose,
+  onNext,
+  onPrevious,
+  onSubmit,
+  state,
+  step,
+}: {
+  answers: QuizAnswers;
+  isOpen: boolean;
+  onAnswerChange: (answers: QuizAnswers) => void;
+  onClose: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  onSubmit: () => void;
+  state: 'idle' | 'submitting' | 'success' | 'error';
+  step: number;
+}) {
+  const canContinue =
+    step === 0
+      ? answers.answers.every(Boolean)
+      : step === 1
+        ? Boolean(answers.age && answers.gender)
+        : Boolean(answers.name && answers.email && answers.goal && answers.consent);
+
+  return (
+    <AnimatePresence>
+      {isOpen ? (
+        <motion.div
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/75 px-4 py-4 backdrop-blur-md sm:py-8"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#090909] shadow-[0_0_60px_rgba(16,185,129,0.18)] sm:max-h-[calc(100dvh-4rem)]"
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.96 }}
+            transition={{ duration: 0.32, ease: "easeOut" }}
+          >
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-white/70 to-emerald-300" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-5 top-5 rounded-full border border-white/10 bg-white/5 p-2 text-zinc-400 transition-colors hover:text-white"
+              aria-label="Close questionnaire"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="overflow-y-auto p-6 sm:p-10">
+              <div className="mb-8 flex items-center justify-between gap-4 pr-12">
+                <div>
+                  <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">Transformation check</p>
+                  <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Quick body reset quiz</h2>
+                </div>
+                <div className="hidden rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 sm:block">
+                  {step + 1}/3
+                </div>
+              </div>
+
+              <div className="mb-8 grid grid-cols-3 gap-2">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className={`h-1.5 rounded-full ${item <= step ? 'bg-emerald-400' : 'bg-white/10'}`} />
+                ))}
+              </div>
+
+              <AnimatePresence mode="wait">
+                {state === 'success' ? (
+                  <motion.div
+                    key="success"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="py-8 text-center"
+                  >
+                    <CheckCircle2 className="mx-auto mb-5 h-14 w-14 text-emerald-400" />
+                    <h3 className="mb-3 text-3xl font-bold text-white">You are on the list.</h3>
+                    <p className="mx-auto mb-8 max-w-md text-zinc-400">We saved your answers. If you want the fastest path, book a free call and we will map the first steps with you.</p>
+                    <button {...{ onClick: openBookingPopup }} className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-colors hover:bg-emerald-400">
+                      Book a Free Call
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key={step}
+                    initial={{ opacity: 0, x: 22 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -22 }}
+                    transition={{ duration: 0.22 }}
+                  >
+                    {step === 0 ? (
+                      <div className="space-y-4">
+                        {quizQuestions.map((question, index) => (
+                          <div key={question} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            <p className="mb-4 text-base font-semibold text-white sm:text-lg">{question}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              {['Yes', 'No'].map((option) => (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  onClick={() => {
+                                    const nextAnswers = [...answers.answers];
+                                    nextAnswers[index] = option;
+                                    onAnswerChange({ ...answers, answers: nextAnswers });
+                                  }}
+                                  className={`rounded-full border px-4 py-3 font-bold transition-all ${
+                                    answers.answers[index] === option
+                                      ? 'border-emerald-400 bg-emerald-500 text-black'
+                                      : 'border-white/10 bg-white/5 text-zinc-200 hover:border-emerald-400/70'
+                                  }`}
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {step === 1 ? (
+                      <div className="space-y-5">
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-zinc-300">Age</span>
+                          <input
+                            type="number"
+                            min="13"
+                            max="100"
+                            value={answers.age}
+                            onChange={(event) => onAnswerChange({ ...answers, age: event.target.value })}
+                            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                            placeholder="Enter your age"
+                          />
+                        </label>
+                        <div>
+                          <span className="mb-3 block text-sm font-semibold text-zinc-300">Gender</span>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            {['Female', 'Male', 'Prefer not to say'].map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => onAnswerChange({ ...answers, gender: option })}
+                                className={`min-h-14 rounded-2xl border px-4 py-3 font-bold transition-all ${
+                                  answers.gender === option
+                                    ? 'border-emerald-400 bg-emerald-500 text-black'
+                                    : 'border-white/10 bg-white/5 text-zinc-200 hover:border-emerald-400/70'
+                                }`}
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {step === 2 ? (
+                      <div className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-2 block text-sm font-semibold text-zinc-300">Name</span>
+                            <input
+                              value={answers.name}
+                              onChange={(event) => onAnswerChange({ ...answers, name: event.target.value })}
+                              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                              placeholder="Your name"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-2 block text-sm font-semibold text-zinc-300">Email</span>
+                            <input
+                              type="email"
+                              value={answers.email}
+                              onChange={(event) => onAnswerChange({ ...answers, email: event.target.value })}
+                              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                              placeholder="you@example.com"
+                            />
+                          </label>
+                        </div>
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-zinc-300">Phone or WhatsApp</span>
+                          <input
+                            value={answers.phone}
+                            onChange={(event) => onAnswerChange({ ...answers, phone: event.target.value })}
+                            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                            placeholder="Optional"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-zinc-300">Biggest goal right now</span>
+                          <textarea
+                            value={answers.goal}
+                            onChange={(event) => onAnswerChange({ ...answers, goal: event.target.value })}
+                            className="min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                            placeholder="Example: lose fat, build muscle, feel confident again"
+                          />
+                        </label>
+                        <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
+                          <input
+                            type="checkbox"
+                            checked={answers.consent}
+                            onChange={(event) => onAnswerChange({ ...answers, consent: event.target.checked })}
+                            className="mt-1 h-4 w-4 accent-emerald-500"
+                          />
+                          I agree that Animax can contact me about coaching using these details.
+                        </label>
+                      </div>
+                    ) : null}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {state !== 'success' ? (
+                <div className="sticky -bottom-6 -mx-6 mt-8 flex flex-col-reverse gap-3 border-t border-white/10 bg-[#090909]/95 px-6 py-4 backdrop-blur sm:-bottom-10 sm:-mx-10 sm:flex-row sm:justify-between sm:px-10">
+                  <button
+                    type="button"
+                    onClick={step === 0 ? onClose : onPrevious}
+                    className="rounded-full border border-white/10 px-6 py-3 font-bold text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    {step === 0 ? 'Close' : 'Back'}
+                  </button>
+                  {step < 2 ? (
+                    <button
+                      type="button"
+                      disabled={!canContinue}
+                      onClick={onNext}
+                      className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                    >
+                      Continue
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!canContinue || state === 'submitting'}
+                      onClick={onSubmit}
+                      className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                    >
+                      {state === 'submitting' ? 'Saving...' : 'See My Next Step'}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
+              {state === 'error' ? (
+                <p className="mt-4 text-sm text-red-300">Could not save this locally. On Vercel, this uses the HubSpot API route.</p>
+              ) : null}
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
