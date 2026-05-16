@@ -1068,7 +1068,7 @@ function OneOnOneDecisionState({
       <CheckCircle2 className="mb-5 h-14 w-14 text-emerald-400" />
       <h3 className="mb-3 text-3xl font-bold text-white">{title}</h3>
       <p className="mb-8 max-w-sm text-zinc-400">{description}</p>
-      <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row sm:justify-center">
+      <div className="flex w-full max-w-xl flex-col gap-4 sm:flex-row sm:justify-center sm:gap-14">
         <button
           type="button"
           onClick={onPrimary}
