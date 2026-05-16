@@ -47,7 +47,7 @@ export class MissingHubSpotPropertyError extends Error {
 }
 
 export async function upsertHubSpotContact(input: LeadInput) {
-  const token = process.env[HUBSPOT_TOKEN_ENV];
+  const token = getHubSpotToken();
 
   if (!token) {
     throw new Error(`Missing ${HUBSPOT_TOKEN_ENV}`);
@@ -73,7 +73,7 @@ export async function upsertHubSpotContact(input: LeadInput) {
 }
 
 export async function upsertOneOnOneHubSpotContact(input: OneOnOneLeadInput) {
-  const token = process.env[HUBSPOT_TOKEN_ENV];
+  const token = getHubSpotToken();
 
   if (!token) {
     throw new Error(`Missing ${HUBSPOT_TOKEN_ENV}`);
@@ -437,3 +437,7 @@ type HubSpotErrorBody = {
     };
   }>;
 };
+
+function getHubSpotToken() {
+  return process.env[HUBSPOT_TOKEN_ENV]?.trim();
+}

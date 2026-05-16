@@ -68,6 +68,8 @@ export default async function handler(req: any, res: any) {
 
     console.error('One-on-one lead sync failed', {
       error: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : undefined,
+      cause: getErrorCauseMessage(error),
       hubspotStatus: (error as { status?: number })?.status,
       hubspotCategory: (error as { body?: { category?: string } })?.body?.category,
     });
@@ -111,4 +113,14 @@ function getRedisClient() {
   });
 
   return redis;
+}
+
+function getErrorCauseMessage(error: unknown) {
+  const cause = (error as { cause?: unknown })?.cause;
+
+  if (cause instanceof Error) {
+    return cause.message;
+  }
+
+  return typeof cause === 'string' ? cause : undefined;
 }
