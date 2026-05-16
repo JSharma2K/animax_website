@@ -18,12 +18,13 @@ Required environment variables:
 ```bash
 VITE_CAL_LINK=https://calendly.com/animaxcoaching/free-call
 HUBSPOT_PRIVATE_APP_TOKEN=pat-na1-example
-CAL_WEBHOOK_SECRET=replace-with-a-random-shared-secret
+KV_REST_API_URL=https://example.upstash.io
+KV_REST_API_TOKEN=example-token
 ```
 
 Do not commit `.env.local` with real secrets. Add these values in Vercel under **Project Settings > Environment Variables**.
 
-HubSpot private app scopes:
+HubSpot service key or private app scopes:
 
 ```text
 crm.objects.contacts.read
@@ -41,18 +42,8 @@ animax_height
 animax_primary_goal
 animax_notes
 animax_consent_to_contact
-animax_last_booking_uid
-animax_last_booking_status
-animax_last_booking_start
 animax_utm_source
 animax_utm_medium
-animax_utm_campaign
 ```
 
-Calendly webhook URL after Vercel deployment:
-
-```text
-https://YOUR-VERCEL-DOMAIN/api/webhooks/calendly
-```
-
-Enable Calendly webhook events for invitee created and invitee canceled.
+Booked-call leads are handled by Calendly's native HubSpot integration. Quiz submissions are stored through `POST /api/leads/interest`.

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Use HubSpot Contacts as the lead table and keep the custom quiz UI. Each completed quiz submission calls a Vercel API route, which securely creates or updates one HubSpot contact by email. The HubSpot private app token never reaches the browser.
+Use HubSpot Contacts as the lead table and keep the custom quiz UI. Each completed quiz submission calls a Vercel API route, which securely creates or updates one HubSpot contact by email. The HubSpot service key/API token never reaches the browser.
 
 Booked-call leads are handled separately by Calendly's native HubSpot integration. This plan does not touch that path except to remove the old custom webhook code and to disable any matching webhook subscription in Calendly if one exists. After this ships, exactly one CRM write path exists for booked-call leads: Calendly's native HubSpot integration.
 
@@ -10,7 +10,7 @@ Booked-call leads are handled separately by Calendly's native HubSpot integratio
 
 - Use `POST /api/leads/interest` as the only quiz submission endpoint.
 - Require these request fields: `name`, `email`, `age`, `gender`, `weight`, `height`, `primaryGoal`, `consentToContact`.
-- Allow these optional request fields: `phone`, `notes`, `utmSource`, `utmMedium`, `utmCampaign`.
+- Allow these optional request fields: `phone`, `notes`, `utmSource`, `utmMedium`.
 - Accept internal anti-spam field `companyWebsite` as a hidden honeypot. It must be backed by a real visually-hidden DOM input, must be blank, must never be stored in HubSpot, and must be included only in validation/spam checks.
 - Return a structured `400` on validation failures so the frontend can recover instead of showing a generic error:
   ```json
@@ -30,7 +30,6 @@ Booked-call leads are handled separately by Calendly's native HubSpot integratio
   - `animax_consent_to_contact`
   - `animax_utm_source`
   - `animax_utm_medium`
-  - `animax_utm_campaign`
 
 ## Implementation Plan
 
@@ -55,6 +54,7 @@ Tasks:
 - Add server-side input limits before calling HubSpot:
   - Replace or supplement `readRawBody(req)` with a size-limited helper, for example `readRawBodyWithLimit(req, maxBytes)`, so oversized bodies are rejected while streaming instead of after the entire request is buffered.
   - Before reading the stream, check `content-length` when present. If it is numeric and greater than `25 * 1024`, return `413` and do not read the body or call HubSpot.
+  - If Vercel or local tooling has already populated `req.body` as a string or object, convert it to the exact raw string the handler will parse (`req.body` for strings, `JSON.stringify(req.body)` for objects), then measure it with `Buffer.byteLength(rawString, 'utf8')` before returning it. Reject over-limit pre-parsed bodies with the same `413`.
   - While reading chunks from `req`, track cumulative bytes and throw/return a typed "body too large" result as soon as the total exceeds `25 * 1024`. Do not call `Buffer.concat(chunks)` after the cap has been exceeded.
   - In `api/leads/interest.ts`, use the size-limited raw-body helper instead of `readJsonBody(req)` so the handler can enforce the quiz payload limit before parsing.
   - Keep `api/_lib/http.ts`'s `readJsonBody` available for other routes, but do not use it in the quiz endpoint because it parses before enforcing the quiz payload limit.
@@ -69,7 +69,7 @@ Tasks:
   - `height`: max 40 chars.
   - `primaryGoal`: max 1000 chars.
   - `notes`: max 3000 chars.
-  - each UTM field: max 120 chars.
+  - each accepted UTM field (`utmSource`, `utmMedium`): max 120 chars.
 - In `api/_lib/hubspot.ts`, search contacts by normalized email, then create or update. The search request only needs `properties: ['email']`; do not fetch `animax_lead_source` unless future logic actually reads it.
 - Implement attribution rules exactly:
   - On contact create: set `animax_lead_source = interest_questionnaire`.
@@ -83,7 +83,7 @@ Tasks:
   - The single remaining caller becomes `api/leads/interest.ts`; the HubSpot helper should set `animax_lead_source = interest_questionnaire` internally only when creating a new quiz contact.
 - Replace the silent custom-property fallback in `api/_lib/hubspot.ts`. On a HubSpot "property does not exist" error, log the missing property name and return HTTP 500 to the client. The frontend already gates download links on a 2xx response, so this prevents users seeing success when quiz answers were dropped. Narrow `isUnknownPropertyError` to HubSpot's `category: 'VALIDATION_ERROR'`, first inspect `errors[].context.propertyName` when present, and only fall back to message matching such as `Property "[^"]+" does not exist`. Never match an error merely because it contains the word "property".
 - Set `lifecyclestage` and `hs_lead_status` **only when creating a new contact**, never on update. This avoids overwriting manual sales progress when a returning visitor re-submits the quiz. In `upsertHubSpotContact`, build the create-properties and update-properties separately, and omit `hs_lead_status`, `lifecyclestage`, and `animax_lead_source` from the update path.
-- Add UTM capture in `src/app/App.tsx`. On mount, read `utm_source`, `utm_medium`, `utm_campaign` from `window.location.search`. If any are present, overwrite the same keys in `sessionStorage` (last-touch attribution). At quiz submit time, read the persisted values from `sessionStorage` and include them in the request payload when non-empty.
+- Add UTM capture in `src/app/App.tsx`. On mount, read `utm_source` and `utm_medium` from `window.location.search`. If either is present, overwrite the same key in `sessionStorage` (last-touch attribution). At quiz submit time, read the persisted values from `sessionStorage` and include them in the request payload when non-empty. Do not capture or send `utm_campaign` for v1 because the HubSpot account cannot create another custom property for it.
 - Add frontend handling for structured validation errors. If the API returns `validation_failed`, parse `missing` and `invalid` and show a concise message in the quiz modal without advancing to the download screen. Keep the existing generic error state for `5xx` and network failures.
   - Add a separate frontend error message state such as `quizErrorMessage` instead of overloading the existing `'error'` status. Reset it when opening the quiz, when the user edits an input, and before a new submission.
   - Treat `400 validation_failed`, `400 invalid_json`, `413`, and `429` as expected API responses in the submit handler. Do not call `console.error` for those client-recoverable responses; reserve logging for network failures and unexpected `5xx` responses.
@@ -101,11 +101,12 @@ Tasks:
   - Apply rate limiting only to `POST /api/leads/interest`. Derive the client IP from the first entry of `x-forwarded-for`, falling back to `x-real-ip`, then `req.socket?.remoteAddress`, then the literal fallback `unknown`. Hash the chosen value with SHA-256 before using it in Redis so raw IPs are not stored.
   - Use a key shaped like `rate:interest-lead:<sha256-ip>`. Minimum v1 target: block after more than 5 submissions per 10 minutes from the same IP hash, returning `429`.
   - Use atomic counter operations, not read-then-write. With `@upstash/redis`, use `const count = await redis.incr(key)`, then `await redis.expire(key, 600)` only when `count === 1`; return `429` when `count > 5`. This creates a fixed 10-minute window from the first request and avoids races under concurrent submissions.
+  - When returning `429`, set a `Retry-After` header from the key TTL when available, falling back to `600` seconds. The frontend can use this header to disable the submit button temporarily.
   - Count all POST attempts before honeypot/schema validation. A bot that trips the honeypot still increments the rate-limit counter even though the endpoint returns stealth success and skips HubSpot.
-  - If either Upstash env var is missing, fail open locally and log a warning. If Upstash is configured but unreachable, fail open and log a warning so a Redis outage does not break lead capture.
+  - If either Vercel KV env var (`KV_REST_API_URL` or `KV_REST_API_TOKEN`) is missing, fail open locally and log a warning. If Upstash/Vercel KV is configured but unreachable, fail open and log a warning so a Redis outage does not break lead capture.
 - Scrub server-side error logs. `console.error` paths in `api/leads/interest.ts` must not log the request body or any HubSpot error response field that echoes back submitted PII; log only an error class, HubSpot category, and the missing property name when applicable.
 - Handle HubSpot rate limits intentionally. If HubSpot returns `429`, retry once after the `Retry-After` header delay when present, or after a short default delay such as one second. If the retry also fails, return the generic frontend-safe failure response without logging PII.
-- Update documentation: `README.md` and the existing `.env.example` must list `VITE_CAL_LINK` (or `VITE_CALENDLY_URL`), `HUBSPOT_PRIVATE_APP_TOKEN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Delete the README's Calendly webhook URL subsection, and remove references to `CAL_WEBHOOK_SECRET` / `CALENDLY_WEBHOOK_SECRET`, the `animax_last_booking_*` properties, and the custom Calendly webhook URL.
+- Update documentation: `README.md` and the existing `.env.example` must list `VITE_CAL_LINK` (or `VITE_CALENDLY_URL`), `HUBSPOT_PRIVATE_APP_TOKEN`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`. Delete the README's Calendly webhook URL subsection, and remove references to `CAL_WEBHOOK_SECRET` / `CALENDLY_WEBHOOK_SECRET`, the `animax_last_booking_*` properties, and the custom Calendly webhook URL.
 - Add a `vercel:dev` script to `package.json` for local API testing, for example `"vercel:dev": "vercel dev"`, and install Vercel locally with `npm install -D vercel` if it is not already available in the repo.
 - Keep `HUBSPOT_PRIVATE_APP_TOKEN` only in Vercel/local environment variables.
 
@@ -125,9 +126,8 @@ Tasks:
 | `animax_consent_to_contact` | Single checkbox | Animax | Code sends `"true"` / `"false"` strings. Confirm the property's internal option values are exactly `true` and `false` in HubSpot before testing writes. |
 | `animax_utm_source` | Single-line text | Animax | |
 | `animax_utm_medium` | Single-line text | Animax | |
-| `animax_utm_campaign` | Single-line text | Animax | |
 
-- Confirm the HubSpot private app or service key has these scopes:
+- Confirm the HubSpot service key or private app token has these scopes:
   - `crm.objects.contacts.read`
   - `crm.objects.contacts.write`
 - Confirm Calendly's native HubSpot integration is connected and writing booked-call leads as Contacts. The custom webhook is removed in implementation, so booked-call CRM sync depends entirely on the native integration after this change ships.
@@ -136,14 +136,14 @@ Tasks:
 - Confirm HubSpot's `hs_lead_status` property still has an option with internal value `NEW`. If the account uses customized lead statuses, replace `NEW` in the implementation with the correct internal value for the equivalent new-lead status.
 - Confirm this environment variable exists in Vercel for Production and Preview:
   - `HUBSPOT_PRIVATE_APP_TOKEN`
-- Create an Upstash Redis database (or use the Vercel Marketplace Upstash integration) for rate limiting, then add these environment variables in Vercel for Production and Preview:
-  - `UPSTASH_REDIS_REST_URL`
-  - `UPSTASH_REDIS_REST_TOKEN`
+- Use the Vercel Marketplace Upstash Redis integration for rate limiting. The integration has already added these environment variables in Vercel for Production and Preview:
+  - `KV_REST_API_URL`
+  - `KV_REST_API_TOKEN`
 - For local end-to-end CRM testing:
   - Install `vercel` (`npm i -D vercel`) and add an `npm run vercel:dev` script if the repo does not already have one.
-  - Create a `.env.local` containing `HUBSPOT_PRIVATE_APP_TOKEN`, `VITE_CAL_LINK` (or `VITE_CALENDLY_URL`), `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
+  - Create a `.env.local` containing `HUBSPOT_PRIVATE_APP_TOKEN`, `VITE_CAL_LINK` (or `VITE_CALENDLY_URL`), `KV_REST_API_URL`, `KV_REST_API_TOKEN`.
   - Run `npm run vercel:dev` (not `npm run dev`) so the `/api/*` routes are served. `npm run dev` alone will return 404 on quiz submission.
-  - Update `.env.example` so it lists all required keys with placeholder values: `VITE_CAL_LINK`, `VITE_CALENDLY_URL`, `HUBSPOT_PRIVATE_APP_TOKEN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
+  - Update `.env.example` so it lists all required keys with placeholder values: `VITE_CAL_LINK`, `VITE_CALENDLY_URL`, `HUBSPOT_PRIVATE_APP_TOKEN`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`.
 - After testing, filter HubSpot Contacts by `animax_lead_source = interest_questionnaire` to view quiz leads. Booked-call leads are filtered via HubSpot's native Calendly integration (Meetings object or whatever fields the native integration sets).
 
 ## Test Plan
@@ -158,9 +158,11 @@ Tasks:
 - Submit malformed JSON and verify the API returns `400` with `{ "error": "invalid_json" }`.
 - Submit a request with `Content-Length` over `25kb` and verify the API returns `413` without reading/parsing the body or calling HubSpot.
 - Submit a streamed/chunked body over `25kb` without `Content-Length` and verify the API returns `413` as soon as the cumulative body exceeds the cap, without calling HubSpot.
+- Submit an over-25kb request in a local/Vercel path where `req.body` is already populated, and verify the helper still returns `413` before parsing/HubSpot work.
 - Fill the hidden `companyWebsite` honeypot DOM input through devtools or an automated request and verify the API returns `200` with `{ "ok": true }` without calling HubSpot and without exposing the honeypot field name.
-- Submit the quiz from a private window where `?utm_source=test_src&utm_medium=test_med&utm_campaign=test_cmp` is in the URL, and verify the three `animax_utm_*` properties are populated on the HubSpot contact.
+- Submit the quiz from a private window where `?utm_source=test_src&utm_medium=test_med&utm_campaign=test_cmp` is in the URL, and verify only `animax_utm_source` and `animax_utm_medium` are populated on the HubSpot contact. `utm_campaign` should be ignored for v1.
 - Submit repeated requests from the same IP and verify the endpoint returns `429` after the configured burst without calling HubSpot.
+- Confirm the `429` response includes a `Retry-After` header.
 - Inspect the Upstash key created during the repeated-request test and verify it uses a SHA-256 IP hash, not a raw IP address, and that the key has a 10-minute TTL after the first increment.
 - Submit two rapid concurrent requests from the same IP and verify the rate-limit counter increments correctly without lost updates.
 - Confirm a booked-call lead created by Calendly's native HubSpot integration appears in HubSpot with no involvement from `/api/leads/interest`.

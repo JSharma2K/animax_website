@@ -1,5 +1,21 @@
-import { readJsonBody, sendJson } from '../_lib/http.js';
-import { upsertHubSpotContact } from '../_lib/hubspot.js';
+import { Redis } from '@upstash/redis';
+import { sendJson } from '../_lib/http.js';
+import { MissingHubSpotPropertyError, upsertHubSpotContact } from '../_lib/hubspot.js';
+import {
+  BodyTooLargeError,
+  INTEREST_LEAD_BODY_LIMIT_BYTES,
+  RATE_LIMIT_MAX_REQUESTS,
+  RATE_LIMIT_WINDOW_SECONDS,
+  InvalidJsonError,
+  buildRateLimitKey,
+  checkRateLimit,
+  getClientIp,
+  hashRateLimitIdentifier,
+  parseJsonBodyWithLimit,
+  validateInterestLead,
+} from '../_lib/interestLead.js';
+
+let redis: Redis | null = null;
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -8,52 +24,91 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = await readJsonBody(req);
-    const name = cleanString(body.name);
-    const email = cleanString(body.email).toLowerCase();
-    const primaryGoal = cleanString(body.primaryGoal);
-    const consentToContact = body.consentToContact === true;
+    const rateLimit = await checkRequestRateLimit(req);
 
-    if (!name || !email || !primaryGoal) {
-      return sendJson(res, 400, { error: 'name, email, and primaryGoal are required' });
+    if (rateLimit.limited) {
+      res.setHeader('Retry-After', String(rateLimit.retryAfter));
+      return sendJson(res, 429, { error: 'rate_limited' });
     }
 
-    if (!isEmail(email)) {
-      return sendJson(res, 400, { error: 'A valid email is required' });
+    const body = await parseJsonBodyWithLimit(req, INTEREST_LEAD_BODY_LIMIT_BYTES);
+    const validation = validateInterestLead(body);
+
+    if (!validation.ok) {
+      if (validation.spam) {
+        return sendJson(res, 200, { ok: true });
+      }
+
+      return sendJson(res, 400, {
+        error: 'validation_failed',
+        missing: validation.missing,
+        invalid: validation.invalid,
+      });
     }
 
-    if (!consentToContact) {
-      return sendJson(res, 400, { error: 'Consent to contact is required' });
-    }
-
-    await upsertHubSpotContact({
-      source: 'interest_questionnaire',
-      name,
-      email,
-      phone: cleanString(body.phone),
-      age: cleanString(body.age),
-      gender: cleanString(body.gender),
-      weight: cleanString(body.weight),
-      height: cleanString(body.height),
-      primaryGoal,
-      notes: cleanString(body.notes),
-      consentToContact,
-      utmSource: cleanString(body.utmSource),
-      utmMedium: cleanString(body.utmMedium),
-      utmCampaign: cleanString(body.utmCampaign),
-    });
+    await upsertHubSpotContact(validation.value);
 
     return sendJson(res, 200, { ok: true });
   } catch (error) {
-    console.error('Interest lead sync failed', error);
+    if (error instanceof BodyTooLargeError) {
+      return sendJson(res, 413, { error: 'body_too_large' });
+    }
+
+    if (error instanceof InvalidJsonError) {
+      return sendJson(res, 400, { error: 'invalid_json' });
+    }
+
+    if (error instanceof MissingHubSpotPropertyError) {
+      console.error('Interest lead sync failed', {
+        error: 'missing_hubspot_property',
+        propertyName: error.propertyName,
+      });
+      return sendJson(res, 500, { error: 'Could not save lead' });
+    }
+
+    console.error('Interest lead sync failed', {
+      error: error instanceof Error ? error.name : 'UnknownError',
+      hubspotStatus: (error as { status?: number })?.status,
+      hubspotCategory: (error as { body?: { category?: string } })?.body?.category,
+    });
     return sendJson(res, 500, { error: 'Could not save lead' });
   }
 }
 
-function cleanString(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
+async function checkRequestRateLimit(req: any) {
+  const client = getRedisClient();
+
+  if (!client) {
+    console.warn('Interest lead rate limit skipped: KV_REST_API_URL or KV_REST_API_TOKEN is not configured');
+    return { limited: false as const };
+  }
+
+  try {
+    return await checkRateLimit(
+      client,
+      buildRateLimitKey(hashRateLimitIdentifier(getClientIp(req))),
+      {
+        maxRequests: RATE_LIMIT_MAX_REQUESTS,
+        windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+      }
+    );
+  } catch (error) {
+    console.warn('Interest lead rate limit skipped: Redis request failed', {
+      error: error instanceof Error ? error.name : 'UnknownError',
+    });
+    return { limited: false as const };
+  }
 }
 
-function isEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+function getRedisClient() {
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+    return null;
+  }
+
+  redis ??= new Redis({
+    url: process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+  });
+
+  return redis;
 }

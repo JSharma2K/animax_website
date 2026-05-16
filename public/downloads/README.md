@@ -1,8 +1,5 @@
-Place the quiz reward PDFs in this folder with these exact filenames:
+Current quiz reward sample:
 
-- `animax-3-week-diet-plan.pdf`
-- `animax-3-week-workout-plan.pdf`
-- `animax-3-week-supplement-stack.pdf`
+- `3-week-muscle-building-workout-plan.pdf`
 
-The quiz success screen links to these paths automatically.
-
+The quiz success screen currently links to this sample PDF.

@@ -11,49 +11,47 @@ type LeadInput = {
   primaryGoal?: string;
   notes?: string;
   consentToContact?: boolean;
-  source: 'booked_call' | 'interest_questionnaire';
-  bookingUid?: string;
-  bookingStatus?: string;
-  bookingStart?: string;
   utmSource?: string;
   utmMedium?: string;
-  utmCampaign?: string;
 };
 
 const HUBSPOT_BASE_URL = 'https://api.hubapi.com';
+const HUBSPOT_TOKEN_ENV = 'HUBSPOT_PRIVATE_APP_TOKEN';
+
+export class MissingHubSpotPropertyError extends Error {
+  constructor(public propertyName?: string) {
+    super(propertyName ? `Missing HubSpot property: ${propertyName}` : 'Missing HubSpot property');
+    this.name = 'MissingHubSpotPropertyError';
+  }
+}
 
 export async function upsertHubSpotContact(input: LeadInput) {
-  const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
+  const token = process.env[HUBSPOT_TOKEN_ENV];
 
   if (!token) {
-    throw new Error('Missing HUBSPOT_PRIVATE_APP_TOKEN');
+    throw new Error(`Missing ${HUBSPOT_TOKEN_ENV}`);
   }
 
-  const properties = buildContactProperties(input);
   const existingId = await findContactIdByEmail(input.email, token);
 
   try {
     if (existingId) {
-      return await updateContact(existingId, properties, token);
+      return await updateContact(existingId, buildUpdateContactProperties(input), token);
     }
 
-    return await createContact(properties, token);
+    return await createContact(buildCreateContactProperties(input), token);
   } catch (error) {
-    if (!isUnknownPropertyError(error)) {
-      throw error;
+    const missingPropertyName = getMissingPropertyName(error);
+
+    if (missingPropertyName !== undefined) {
+      throw new MissingHubSpotPropertyError(missingPropertyName);
     }
 
-    const fallbackProperties = stripCustomProperties(properties);
-
-    if (existingId) {
-      return updateContact(existingId, fallbackProperties, token);
-    }
-
-    return createContact(fallbackProperties, token);
+    throw error;
   }
 }
 
-function buildContactProperties(input: LeadInput) {
+function buildCreateContactProperties(input: LeadInput) {
   const { firstname, lastname } = splitName(input.name);
   const properties: ContactProperties = {
     email: input.email,
@@ -62,7 +60,7 @@ function buildContactProperties(input: LeadInput) {
     lastname,
     phone: input.phone,
     hs_lead_status: 'NEW',
-    animax_lead_source: input.source,
+    animax_lead_source: 'interest_questionnaire',
     animax_age: input.age,
     animax_gender: input.gender,
     animax_weight: input.weight,
@@ -70,12 +68,29 @@ function buildContactProperties(input: LeadInput) {
     animax_primary_goal: input.primaryGoal,
     animax_notes: input.notes,
     animax_consent_to_contact: String(Boolean(input.consentToContact)),
-    animax_last_booking_uid: input.bookingUid,
-    animax_last_booking_status: input.bookingStatus,
-    animax_last_booking_start: input.bookingStart,
     animax_utm_source: input.utmSource,
     animax_utm_medium: input.utmMedium,
-    animax_utm_campaign: input.utmCampaign,
+  };
+
+  return compactProperties(properties);
+}
+
+function buildUpdateContactProperties(input: LeadInput) {
+  const { firstname, lastname } = splitName(input.name);
+  const properties: ContactProperties = {
+    email: input.email,
+    firstname,
+    lastname,
+    phone: input.phone,
+    animax_age: input.age,
+    animax_gender: input.gender,
+    animax_weight: input.weight,
+    animax_height: input.height,
+    animax_primary_goal: input.primaryGoal,
+    animax_notes: input.notes,
+    animax_consent_to_contact: String(Boolean(input.consentToContact)),
+    animax_utm_source: input.utmSource,
+    animax_utm_medium: input.utmMedium,
   };
 
   return compactProperties(properties);
@@ -118,7 +133,7 @@ async function updateContact(contactId: string, properties: ContactProperties, t
   });
 }
 
-async function hubspotRequest(path: string, token: string, init: RequestInit) {
+async function hubspotRequest(path: string, token: string, init: RequestInit, attempt = 0): Promise<any> {
   const response = await fetch(`${HUBSPOT_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -129,6 +144,11 @@ async function hubspotRequest(path: string, token: string, init: RequestInit) {
   });
 
   const body = await response.json().catch(() => ({}));
+
+  if (response.status === 429 && attempt === 0) {
+    await delay(getRetryAfterMs(response.headers.get('retry-after')));
+    return hubspotRequest(path, token, init, attempt + 1);
+  }
 
   if (!response.ok) {
     const error = new Error(body.message || 'HubSpot request failed');
@@ -143,12 +163,6 @@ async function hubspotRequest(path: string, token: string, init: RequestInit) {
 function compactProperties(properties: ContactProperties) {
   return Object.fromEntries(
     Object.entries(properties).filter(([, value]) => value !== undefined && value !== null && value !== '')
-  );
-}
-
-function stripCustomProperties(properties: ContactProperties) {
-  return Object.fromEntries(
-    Object.entries(properties).filter(([key]) => !key.startsWith('animax_'))
   );
 }
 
@@ -169,7 +183,49 @@ function splitName(name = '') {
   };
 }
 
-function isUnknownPropertyError(error: unknown) {
-  const body = (error as Error & { body?: { message?: string } }).body;
-  return typeof body?.message === 'string' && body.message.toLowerCase().includes('property');
+function getMissingPropertyName(error: unknown) {
+  const body = (error as Error & { body?: HubSpotErrorBody }).body;
+
+  if (body?.category !== 'VALIDATION_ERROR') {
+    return undefined;
+  }
+
+  const contextPropertyName = body.errors
+    ?.map((item) => item.context?.propertyName)
+    .find((value): value is string | string[] => typeof value === 'string' || Array.isArray(value));
+
+  if (Array.isArray(contextPropertyName)) {
+    return contextPropertyName[0];
+  }
+
+  if (typeof contextPropertyName === 'string') {
+    return contextPropertyName;
+  }
+
+  const match = body.message?.match(/Property "([^"]+)" does not exist/i);
+  return match?.[1];
 }
+
+function getRetryAfterMs(value: string | null) {
+  const retryAfterSeconds = Number(value);
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+
+  return 1000;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type HubSpotErrorBody = {
+  category?: string;
+  message?: string;
+  errors?: Array<{
+    context?: {
+      propertyName?: string | string[];
+    };
+  }>;
+};

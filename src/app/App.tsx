@@ -25,21 +25,14 @@ const quizQuestions = [
 
 const quizDownloadFiles = [
   {
-    title: '3-week diet plan',
-    href: '/downloads/animax-3-week-diet-plan.pdf',
-  },
-  {
-    title: '3-week workout plan',
-    href: '/downloads/animax-3-week-workout-plan.pdf',
-  },
-  {
-    title: '3-week supplement stack',
-    href: '/downloads/animax-3-week-supplement-stack.pdf',
+    title: 'Sample 3-week workout plan',
+    href: '/downloads/3-week-muscle-building-workout-plan.pdf',
   },
 ];
 
 const initialQuizAnswers = {
   age: '',
+  companyWebsite: '',
   gender: '',
   weight: '',
   height: '',
@@ -58,6 +51,8 @@ export default function App() {
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [quizStep, setQuizStep] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState(initialQuizAnswers);
+  const [quizErrorMessage, setQuizErrorMessage] = useState('');
+  const [quizRetryUntil, setQuizRetryUntil] = useState(0);
   const [quizState, setQuizState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({
@@ -73,6 +68,8 @@ export default function App() {
   const quizButtonProps = {
     onClick: () => {
       setQuizState('idle');
+      setQuizErrorMessage('');
+      setQuizRetryUntil(0);
       setQuizStep(0);
       setIsQuizOpen(true);
     },
@@ -85,6 +82,10 @@ export default function App() {
     }
 
     loadCalendlyAssets();
+  }, []);
+
+  useEffect(() => {
+    persistUtmParams();
   }, []);
 
   useEffect(() => {
@@ -572,14 +573,21 @@ export default function App() {
         isOpen={isQuizOpen}
         state={quizState}
         step={quizStep}
-        onAnswerChange={setQuizAnswers}
+        errorMessage={quizErrorMessage}
+        isSubmitLocked={quizRetryUntil > Date.now()}
+        onAnswerChange={(answers) => {
+          setQuizErrorMessage('');
+          setQuizAnswers(answers);
+        }}
         onClose={() => setIsQuizOpen(false)}
         onNext={() => setQuizStep((step) => Math.min(step + 1, quizQuestions.length))}
         onPrevious={() => setQuizStep((step) => Math.max(step - 1, 0))}
         onSubmit={async () => {
           setQuizState('submitting');
+          setQuizErrorMessage('');
 
           try {
+            const utmValues = readStoredUtmParams();
             const response = await fetch('/api/leads/interest', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -588,6 +596,7 @@ export default function App() {
                 email: quizAnswers.email,
                 phone: quizAnswers.phone,
                 primaryGoal: quizAnswers.goal,
+                companyWebsite: quizAnswers.companyWebsite,
                 age: quizAnswers.age,
                 gender: quizAnswers.gender,
                 weight: quizAnswers.weight,
@@ -596,10 +605,34 @@ export default function App() {
                   .map((question, index) => `${question} ${quizAnswers.answers[index] || 'Not answered'}`)
                   .join('\n'),
                 consentToContact: quizAnswers.consent,
+                ...utmValues,
               }),
             });
 
             if (!response.ok) {
+              const responseBody = await response.json().catch(() => ({}));
+
+              if (response.status === 400) {
+                setQuizErrorMessage(formatQuizApiError(responseBody));
+                setQuizState('idle');
+                return;
+              }
+
+              if (response.status === 413) {
+                setQuizErrorMessage('Your answers are too long. Please shorten them and try again.');
+                setQuizState('idle');
+                return;
+              }
+
+              if (response.status === 429) {
+                const retryAfterSeconds = Number(response.headers.get('Retry-After')) || 600;
+                setQuizRetryUntil(Date.now() + retryAfterSeconds * 1000);
+                window.setTimeout(() => setQuizRetryUntil(0), retryAfterSeconds * 1000);
+                setQuizErrorMessage("You've submitted this a few times. Please wait a few minutes and try again.");
+                setQuizState('idle');
+                return;
+              }
+
               throw new Error('Lead submission failed');
             }
 
@@ -655,7 +688,9 @@ type QuizAnswers = typeof initialQuizAnswers;
 
 function TransformationQuiz({
   answers,
+  errorMessage,
   isOpen,
+  isSubmitLocked,
   onAnswerChange,
   onClose,
   onNext,
@@ -665,7 +700,9 @@ function TransformationQuiz({
   step,
 }: {
   answers: QuizAnswers;
+  errorMessage: string;
   isOpen: boolean;
+  isSubmitLocked: boolean;
   onAnswerChange: (answers: QuizAnswers) => void;
   onClose: () => void;
   onNext: () => void;
@@ -756,11 +793,11 @@ function TransformationQuiz({
                       className="py-8 text-center"
                     >
                       <CheckCircle2 className="mx-auto mb-5 h-14 w-14 text-emerald-400" />
-                      <h3 className="mb-3 text-3xl font-bold text-white">Your free stack is ready.</h3>
+                      <h3 className="mb-3 text-3xl font-bold text-white">Your sample plan is ready.</h3>
                       <p className="mx-auto mb-8 max-w-lg text-zinc-400">
-                        Download your 3-week diet, workout, and supplement stack below. Drop the PDFs into <span className="font-mono text-emerald-300">public/downloads</span> later using these filenames and the buttons will serve them automatically.
+                        Download the sample 3-week muscle-building workout plan below.
                       </p>
-                      <div className="mx-auto mb-8 grid max-w-lg gap-3 sm:grid-cols-3">
+                      <div className="mx-auto mb-8 grid max-w-sm gap-3">
                         {quizDownloadFiles.map((file) => (
                           <a
                             key={file.href}
@@ -826,6 +863,7 @@ function TransformationQuiz({
                             <label className="block">
                               <span className="mb-2 block text-sm font-semibold text-zinc-300">Name</span>
                               <input
+                                maxLength={120}
                                 value={answers.name}
                                 onChange={(event) => onAnswerChange({ ...answers, name: event.target.value })}
                                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
@@ -836,6 +874,7 @@ function TransformationQuiz({
                               <span className="mb-2 block text-sm font-semibold text-zinc-300">Email</span>
                               <input
                                 type="email"
+                                maxLength={254}
                                 value={answers.email}
                                 onChange={(event) => onAnswerChange({ ...answers, email: event.target.value })}
                                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
@@ -849,7 +888,7 @@ function TransformationQuiz({
                                 min="13"
                                 max="100"
                                 value={answers.age}
-                                onChange={(event) => onAnswerChange({ ...answers, age: event.target.value })}
+                                onChange={(event) => onAnswerChange({ ...answers, age: clampAgeInput(event.target.value) })}
                                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
                                 placeholder="Age"
                               />
@@ -857,6 +896,7 @@ function TransformationQuiz({
                             <label className="block">
                               <span className="mb-2 block text-sm font-semibold text-zinc-300">Weight</span>
                               <input
+                                maxLength={40}
                                 value={answers.weight}
                                 onChange={(event) => onAnswerChange({ ...answers, weight: event.target.value })}
                                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
@@ -866,6 +906,7 @@ function TransformationQuiz({
                             <label className="block">
                               <span className="mb-2 block text-sm font-semibold text-zinc-300">Height</span>
                               <input
+                                maxLength={40}
                                 value={answers.height}
                                 onChange={(event) => onAnswerChange({ ...answers, height: event.target.value })}
                                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
@@ -875,6 +916,7 @@ function TransformationQuiz({
                             <label className="block">
                               <span className="mb-2 block text-sm font-semibold text-zinc-300">Phone or WhatsApp</span>
                               <input
+                                maxLength={40}
                                 value={answers.phone}
                                 onChange={(event) => onAnswerChange({ ...answers, phone: event.target.value })}
                                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
@@ -904,12 +946,22 @@ function TransformationQuiz({
                           <label className="block">
                             <span className="mb-2 block text-sm font-semibold text-zinc-300">Biggest goal right now</span>
                             <textarea
+                              maxLength={1000}
                               value={answers.goal}
                               onChange={(event) => onAnswerChange({ ...answers, goal: event.target.value })}
                               className="min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
                               placeholder="Example: lose fat, build muscle, feel confident again"
                             />
                           </label>
+                          <input
+                            name="companyWebsite"
+                            autoComplete="off"
+                            tabIndex={-1}
+                            aria-hidden="true"
+                            value={answers.companyWebsite}
+                            onChange={(event) => onAnswerChange({ ...answers, companyWebsite: event.target.value })}
+                            className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
+                          />
                           <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
                             <input
                               type="checkbox"
@@ -925,8 +977,8 @@ function TransformationQuiz({
                   )}
                 </AnimatePresence>
 
-                {state === 'error' ? (
-                  <p className="mt-4 text-sm text-red-300">Could not save this locally. On Vercel, this uses the HubSpot API route.</p>
+                {errorMessage || state === 'error' ? (
+                  <p className="mt-4 text-sm text-red-300">{errorMessage || 'Could not save your details. Please try again.'}</p>
                 ) : null}
               </div>
 
@@ -954,7 +1006,7 @@ function TransformationQuiz({
                   ) : (
                     <button
                       type="button"
-                      disabled={!canContinue || state === 'submitting'}
+                      disabled={!canContinue || state === 'submitting' || isSubmitLocked}
                       onClick={onSubmit}
                       className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300 disabled:cursor-not-allowed disabled:text-emerald-400/40"
                     >
@@ -1019,4 +1071,94 @@ function openBookingPopup() {
   }
 
   window.open(bookingUrl, '_blank', 'noopener,noreferrer');
+}
+
+function persistUtmParams() {
+  const params = new URLSearchParams(window.location.search);
+  const utmSource = params.get('utm_source')?.trim();
+  const utmMedium = params.get('utm_medium')?.trim();
+
+  if (utmSource) {
+    sessionStorage.setItem('animax_utm_source', utmSource);
+  }
+
+  if (utmMedium) {
+    sessionStorage.setItem('animax_utm_medium', utmMedium);
+  }
+}
+
+function readStoredUtmParams() {
+  return compactPayload({
+    utmSource: sessionStorage.getItem('animax_utm_source')?.trim(),
+    utmMedium: sessionStorage.getItem('animax_utm_medium')?.trim(),
+  });
+}
+
+function compactPayload(values: Record<string, string | undefined | null>) {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== '')
+  );
+}
+
+function clampAgeInput(value: string) {
+  if (!value) {
+    return '';
+  }
+
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return '';
+  }
+
+  return String(Math.min(100, Math.max(0, Math.floor(numericValue)))).slice(0, 3);
+}
+
+function formatQuizApiError(responseBody: unknown) {
+  if (!isRecord(responseBody)) {
+    return 'Something went wrong. Please try again.';
+  }
+
+  if (responseBody.error === 'invalid_json') {
+    return 'Something went wrong. Please try again.';
+  }
+
+  if (responseBody.error !== 'validation_failed') {
+    return 'Something went wrong. Please try again.';
+  }
+
+  const missing = Array.isArray(responseBody.missing) ? responseBody.missing : [];
+  const invalid = Array.isArray(responseBody.invalid) ? responseBody.invalid : [];
+  const fields = [...missing, ...invalid]
+    .filter((value): value is string => typeof value === 'string')
+    .map(formatQuizFieldName);
+
+  if (!fields.length) {
+    return 'Please check the highlighted fields and try again.';
+  }
+
+  return `Please check these fields and try again: ${fields.join(', ')}.`;
+}
+
+function formatQuizFieldName(value: string) {
+  const labels: Record<string, string> = {
+    age: 'age',
+    consentToContact: 'consent',
+    email: 'email',
+    gender: 'gender',
+    height: 'height',
+    name: 'name',
+    notes: 'quiz answers',
+    phone: 'phone',
+    primaryGoal: 'goal',
+    utmMedium: 'UTM medium',
+    utmSource: 'UTM source',
+    weight: 'weight',
+  };
+
+  return labels[value] || value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
