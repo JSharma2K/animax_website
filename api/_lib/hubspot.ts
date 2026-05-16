@@ -15,8 +15,21 @@ type LeadInput = {
   utmMedium?: string;
 };
 
+type OneOnOneLeadInput = {
+  name: string;
+  email: string;
+  phone: string;
+  age: string;
+  consentToContact: true;
+  utmSource?: string;
+  utmMedium?: string;
+};
+
 const HUBSPOT_BASE_URL = 'https://api.hubapi.com';
 const HUBSPOT_TOKEN_ENV = 'HUBSPOT_PRIVATE_APP_TOKEN';
+const ONE_ON_ONE_LEAD_SOURCE = 'one_on_one_guarantee';
+const ONE_ON_ONE_NOTE = 'Requested 1:1 Guarantee Call from coaching card.';
+const MAX_NOTES_LENGTH = 3000;
 
 export class MissingHubSpotPropertyError extends Error {
   constructor(public propertyName?: string) {
@@ -32,14 +45,44 @@ export async function upsertHubSpotContact(input: LeadInput) {
     throw new Error(`Missing ${HUBSPOT_TOKEN_ENV}`);
   }
 
-  const existingId = await findContactIdByEmail(input.email, token);
+  const existing = await findContactByEmail(input.email, token, ['email']);
 
   try {
-    if (existingId) {
-      return await updateContact(existingId, buildUpdateContactProperties(input), token);
+    if (existing?.id) {
+      return await updateContact(existing.id, buildUpdateContactProperties(input), token);
     }
 
     return await createContact(buildCreateContactProperties(input), token);
+  } catch (error) {
+    const missingPropertyName = getMissingPropertyName(error);
+
+    if (missingPropertyName !== undefined) {
+      throw new MissingHubSpotPropertyError(missingPropertyName);
+    }
+
+    throw error;
+  }
+}
+
+export async function upsertOneOnOneHubSpotContact(input: OneOnOneLeadInput) {
+  const token = process.env[HUBSPOT_TOKEN_ENV];
+
+  if (!token) {
+    throw new Error(`Missing ${HUBSPOT_TOKEN_ENV}`);
+  }
+
+  const existing = await findContactByEmail(input.email, token, ['email', 'animax_notes']);
+
+  try {
+    if (existing?.id) {
+      return await updateContact(
+        existing.id,
+        buildOneOnOneUpdateContactProperties(input, existing.properties?.animax_notes),
+        token
+      );
+    }
+
+    return await createContact(buildOneOnOneCreateContactProperties(input), token);
   } catch (error) {
     const missingPropertyName = getMissingPropertyName(error);
 
@@ -75,6 +118,44 @@ function buildCreateContactProperties(input: LeadInput) {
   return compactProperties(properties);
 }
 
+function buildOneOnOneCreateContactProperties(input: OneOnOneLeadInput) {
+  const { firstname, lastname } = splitName(input.name);
+  const properties: ContactProperties = {
+    email: input.email,
+    lifecyclestage: 'lead',
+    firstname,
+    lastname,
+    phone: input.phone,
+    hs_lead_status: 'NEW',
+    animax_lead_source: ONE_ON_ONE_LEAD_SOURCE,
+    animax_age: input.age,
+    animax_notes: ONE_ON_ONE_NOTE,
+    animax_consent_to_contact: 'true',
+    animax_utm_source: input.utmSource,
+    animax_utm_medium: input.utmMedium,
+  };
+
+  return compactProperties(properties);
+}
+
+function buildOneOnOneUpdateContactProperties(input: OneOnOneLeadInput, existingNotes?: string) {
+  const { firstname, lastname } = splitName(input.name);
+  const properties: ContactProperties = {
+    email: input.email,
+    firstname,
+    lastname,
+    phone: input.phone,
+    animax_lead_source: ONE_ON_ONE_LEAD_SOURCE,
+    animax_age: input.age,
+    animax_notes: mergeOneOnOneNotes(existingNotes),
+    animax_consent_to_contact: 'true',
+    animax_utm_source: input.utmSource,
+    animax_utm_medium: input.utmMedium,
+  };
+
+  return compactProperties(properties);
+}
+
 function buildUpdateContactProperties(input: LeadInput) {
   const { firstname, lastname } = splitName(input.name);
   const properties: ContactProperties = {
@@ -96,7 +177,7 @@ function buildUpdateContactProperties(input: LeadInput) {
   return compactProperties(properties);
 }
 
-async function findContactIdByEmail(email: string, token: string) {
+async function findContactByEmail(email: string, token: string, properties: string[]) {
   const response = await hubspotRequest('/crm/v3/objects/contacts/search', token, {
     method: 'POST',
     body: JSON.stringify({
@@ -111,12 +192,12 @@ async function findContactIdByEmail(email: string, token: string) {
           ],
         },
       ],
-      properties: ['email'],
+      properties,
       limit: 1,
     }),
   });
 
-  return response.results?.[0]?.id as string | undefined;
+  return response.results?.[0] as { id?: string; properties?: Record<string, string | undefined> } | undefined;
 }
 
 async function createContact(properties: ContactProperties, token: string) {
@@ -124,6 +205,20 @@ async function createContact(properties: ContactProperties, token: string) {
     method: 'POST',
     body: JSON.stringify({ properties }),
   });
+}
+
+function mergeOneOnOneNotes(existingNotes = '') {
+  const trimmedExistingNotes = existingNotes.trim();
+
+  if (!trimmedExistingNotes) {
+    return ONE_ON_ONE_NOTE;
+  }
+
+  if (trimmedExistingNotes.includes(ONE_ON_ONE_NOTE)) {
+    return trimmedExistingNotes.slice(0, MAX_NOTES_LENGTH);
+  }
+
+  return `${ONE_ON_ONE_NOTE}\n\n${trimmedExistingNotes}`.slice(0, MAX_NOTES_LENGTH);
 }
 
 async function updateContact(contactId: string, properties: ContactProperties, token: string) {

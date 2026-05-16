@@ -23,8 +23,22 @@ export type ValidInterestLead = {
   utmMedium?: string;
 };
 
+export type ValidOneOnOneLead = {
+  name: string;
+  email: string;
+  phone: string;
+  age: string;
+  consentToContact: true;
+  utmSource?: string;
+  utmMedium?: string;
+};
+
 export type InterestLeadValidationResult =
   | { ok: true; value: ValidInterestLead }
+  | { ok: false; missing: string[]; invalid: string[]; spam?: boolean };
+
+export type OneOnOneLeadValidationResult =
+  | { ok: true; value: ValidOneOnOneLead }
   | { ok: false; missing: string[]; invalid: string[]; spam?: boolean };
 
 export class BodyTooLargeError extends Error {
@@ -124,6 +138,71 @@ export function validateInterestLead(body: RawLeadBody): InterestLeadValidationR
   };
 }
 
+export function validateOneOnOneLead(body: RawLeadBody): OneOnOneLeadValidationResult {
+  const companyWebsite = cleanString(body.companyWebsite);
+
+  if (companyWebsite) {
+    return { ok: false, missing: [], invalid: [], spam: true };
+  }
+
+  const normalized = {
+    name: cleanString(body.name),
+    email: cleanString(body.email).toLowerCase(),
+    phone: cleanString(body.phone),
+    age: cleanString(body.age),
+    consentToContact: body.consentToContact,
+    utmSource: cleanString(body.utmSource),
+    utmMedium: cleanString(body.utmMedium),
+  };
+
+  const missing: string[] = [];
+  const invalid: string[] = [];
+
+  for (const field of ['name', 'email', 'phone', 'age'] as const) {
+    if (!normalized[field]) {
+      missing.push(field);
+    }
+  }
+
+  if (body.consentToContact === undefined) {
+    missing.push('consentToContact');
+  } else if (body.consentToContact !== true) {
+    invalid.push('consentToContact');
+  }
+
+  validateMaxLength(normalized.name, 'name', 120, invalid);
+  validateMaxLength(normalized.email, 'email', 254, invalid);
+  validateMaxLength(normalized.phone, 'phone', 40, invalid);
+  validateMaxLength(normalized.age, 'age', 3, invalid);
+  validateMaxLength(normalized.utmSource, 'utmSource', 120, invalid);
+  validateMaxLength(normalized.utmMedium, 'utmMedium', 120, invalid);
+
+  if (normalized.email && !isEmail(normalized.email)) {
+    invalid.push('email');
+  }
+
+  if (normalized.age && !isValidAge(normalized.age)) {
+    invalid.push('age');
+  }
+
+  if (missing.length || invalid.length) {
+    return { ok: false, missing: unique(missing), invalid: unique(invalid) };
+  }
+
+  return {
+    ok: true,
+    value: compact({
+      name: normalized.name,
+      email: normalized.email,
+      phone: normalized.phone,
+      age: normalized.age,
+      consentToContact: true,
+      utmSource: normalized.utmSource,
+      utmMedium: normalized.utmMedium,
+    }) as ValidOneOnOneLead,
+  };
+}
+
 export async function parseJsonBodyWithLimit(req: any, maxBytes: number): Promise<RawLeadBody> {
   const rawBody = await readRawBodyWithLimit(req, maxBytes);
 
@@ -188,8 +267,8 @@ export function hashRateLimitIdentifier(value: string) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-export function buildRateLimitKey(ipHash: string) {
-  return `rate:interest-lead:${ipHash}`;
+export function buildRateLimitKey(ipHash: string, prefix = 'interest-lead') {
+  return `rate:${prefix}:${ipHash}`;
 }
 
 export async function checkRateLimit(

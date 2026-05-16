@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MissingHubSpotPropertyError,
+  upsertOneOnOneHubSpotContact,
   upsertHubSpotContact,
 } from './hubspot.js';
 
@@ -124,6 +125,91 @@ test('upsertHubSpotContact throws missing property errors instead of dropping cu
       assert.equal((error as MissingHubSpotPropertyError).propertyName, 'animax_age');
       return true;
     }
+  );
+});
+
+test('upsertOneOnOneHubSpotContact overwrites source on create', async () => {
+  process.env.HUBSPOT_PRIVATE_APP_TOKEN = 'test-token';
+  const requests: Array<{ url: string; init: RequestInit; body: any }> = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({
+      url: String(url),
+      init,
+      body: init.body ? JSON.parse(String(init.body)) : undefined,
+    });
+
+    if (String(url).endsWith('/crm/v3/objects/contacts/search')) {
+      return jsonResponse({ results: [] });
+    }
+
+    return jsonResponse({ id: 'created-contact' });
+  };
+
+  await upsertOneOnOneHubSpotContact({
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '+1 555 123',
+    age: '32',
+    consentToContact: true,
+    utmSource: 'instagram',
+    utmMedium: 'paid',
+  });
+
+  const createProperties = requests[1].body.properties;
+  assert.equal(createProperties.animax_lead_source, 'one_on_one_guarantee');
+  assert.equal(createProperties.lifecyclestage, 'lead');
+  assert.equal(createProperties.hs_lead_status, 'NEW');
+  assert.equal(createProperties.animax_age, '32');
+  assert.equal(createProperties.phone, '+1 555 123');
+  assert.equal(createProperties.animax_notes, 'Requested 1:1 Guarantee Call from coaching card.');
+});
+
+test('upsertOneOnOneHubSpotContact overwrites source and preserves existing notes on update', async () => {
+  process.env.HUBSPOT_PRIVATE_APP_TOKEN = 'test-token';
+  const requests: Array<{ url: string; init: RequestInit; body: any }> = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({
+      url: String(url),
+      init,
+      body: init.body ? JSON.parse(String(init.body)) : undefined,
+    });
+
+    if (String(url).endsWith('/crm/v3/objects/contacts/search')) {
+      return jsonResponse({
+        results: [
+          {
+            id: 'existing-contact',
+            properties: {
+              email: 'jane@example.com',
+              animax_notes: 'Existing quiz notes',
+            },
+          },
+        ],
+      });
+    }
+
+    return jsonResponse({ id: 'existing-contact' });
+  };
+
+  await upsertOneOnOneHubSpotContact({
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '+1 555 123',
+    age: '33',
+    consentToContact: true,
+  });
+
+  const updateProperties = requests[1].body.properties;
+  assert.equal(requests[1].init.method, 'PATCH');
+  assert.equal(updateProperties.animax_lead_source, 'one_on_one_guarantee');
+  assert.equal(updateProperties.lifecyclestage, undefined);
+  assert.equal(updateProperties.hs_lead_status, undefined);
+  assert.equal(updateProperties.animax_age, '33');
+  assert.equal(
+    updateProperties.animax_notes,
+    'Requested 1:1 Guarantee Call from coaching card.\n\nExisting quiz notes'
   );
 });
 

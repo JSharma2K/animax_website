@@ -7,6 +7,7 @@ import {
   checkRateLimit,
   parseJsonBodyWithLimit,
   validateInterestLead,
+  validateOneOnOneLead,
 } from './interestLead.js';
 
 test('validateInterestLead returns normalized input for a complete quiz lead', () => {
@@ -123,6 +124,60 @@ test('validateInterestLead rejects malformed and oversized fields', () => {
     'utmSource',
     'weight',
   ]);
+});
+
+test('validateOneOnOneLead returns normalized input for a complete one-on-one lead', () => {
+  const result = validateOneOnOneLead({
+    name: '  Jane Doe  ',
+    email: '  JANE@EXAMPLE.COM  ',
+    phone: ' +1 555 123 ',
+    age: '32',
+    consentToContact: true,
+    utmSource: 'instagram',
+    utmMedium: 'paid',
+    companyWebsite: '',
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value, {
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '+1 555 123',
+    age: '32',
+    consentToContact: true,
+    utmSource: 'instagram',
+    utmMedium: 'paid',
+  });
+});
+
+test('validateOneOnOneLead rejects missing and malformed fields', () => {
+  const result = validateOneOnOneLead({
+    name: '',
+    email: 'not-an-email',
+    phone: '',
+    age: '12',
+    consentToContact: false,
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.missing.sort(), ['name', 'phone']);
+  assert.deepEqual(result.invalid.sort(), ['age', 'consentToContact', 'email']);
+});
+
+test('validateOneOnOneLead reports spam without exposing the honeypot as invalid', () => {
+  const result = validateOneOnOneLead({
+    name: 'Jane',
+    email: 'jane@example.com',
+    phone: '+1 555 123',
+    age: '32',
+    consentToContact: true,
+    companyWebsite: 'https://spam.example',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.spam, true);
+  assert.deepEqual(result.missing, []);
+  assert.deepEqual(result.invalid, []);
 });
 
 test('parseJsonBodyWithLimit rejects pre-parsed oversized bodies', async () => {

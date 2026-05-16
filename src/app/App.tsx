@@ -15,6 +15,7 @@ declare global {
 }
 
 const bookingUrl = normalizeBookingUrl(import.meta.env.VITE_CALENDLY_URL || import.meta.env.VITE_CAL_LINK);
+const oneOnOneBookingUrl = normalizeBookingUrl(import.meta.env.VITE_CALENDLY_ONE_ON_ONE_URL);
 
 const quizQuestions = [
   'Do you feel your current routine is moving you toward the body you want?',
@@ -44,6 +45,15 @@ const initialQuizAnswers = {
   answers: quizQuestions.map(() => ''),
 };
 
+const initialOneOnOneAnswers = {
+  age: '',
+  companyWebsite: '',
+  consent: false,
+  email: '',
+  name: '',
+  phone: '',
+};
+
 export default function App() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -54,6 +64,11 @@ export default function App() {
   const [quizErrorMessage, setQuizErrorMessage] = useState('');
   const [quizRetryUntil, setQuizRetryUntil] = useState(0);
   const [quizState, setQuizState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [oneOnOneAnswers, setOneOnOneAnswers] = useState(initialOneOnOneAnswers);
+  const [oneOnOneErrorMessage, setOneOnOneErrorMessage] = useState('');
+  const [oneOnOneRetryUntil, setOneOnOneRetryUntil] = useState(0);
+  const [oneOnOneSubmitState, setOneOnOneSubmitState] = useState<'idle' | 'submitting' | 'error'>('idle');
+  const [oneOnOneCardState, setOneOnOneCardState] = useState<'front' | 'form' | 'choice' | 'booking' | 'thanks'>('front');
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -76,8 +91,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!bookingUrl) {
-      console.warn('VITE_CAL_LINK or VITE_CALENDLY_URL is not configured.');
+    if (!bookingUrl && !oneOnOneBookingUrl) {
+      console.warn('VITE_CAL_LINK, VITE_CALENDLY_URL, or VITE_CALENDLY_ONE_ON_ONE_URL is not configured.');
       return;
     }
 
@@ -434,36 +449,122 @@ export default function App() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
-              {features.map((feature, idx) => (
-                <motion.div 
-                  key={idx}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.6, delay: idx * 0.15 }}
-                  className="group relative rounded-[2rem] bg-zinc-900/50 border border-white/5 overflow-hidden hover:border-emerald-500/50 transition-colors duration-500 flex flex-col"
-                >
-                  <div className="h-64 sm:h-80 relative overflow-hidden shrink-0">
-                    <ImageWithFallback 
-                      src={feature.img} 
-                      alt={feature.title}
-                      className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0e] via-zinc-900/40 to-transparent" />
-                  </div>
-                  <div className="p-8 sm:p-10 flex-grow flex flex-col justify-end bg-gradient-to-b from-[#0d0d0e] to-zinc-900/90">
-                    <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 border border-emerald-500/20">
-                      <feature.icon className="w-7 h-7 text-emerald-400" />
+              {features.map((feature, idx) =>
+                idx === 1 ? (
+                  <OneOnOneFeatureCard
+                    key={feature.title}
+                    answers={oneOnOneAnswers}
+                    cardState={oneOnOneCardState}
+                    errorMessage={oneOnOneErrorMessage}
+                    feature={feature}
+                    isSubmitLocked={oneOnOneRetryUntil > Date.now()}
+                    submitState={oneOnOneSubmitState}
+                    onAnswerChange={(answers) => {
+                      setOneOnOneErrorMessage('');
+                      setOneOnOneSubmitState('idle');
+                      setOneOnOneAnswers(answers);
+                    }}
+                    onBack={() => {
+                      setOneOnOneErrorMessage('');
+                      setOneOnOneSubmitState('idle');
+                      setOneOnOneCardState('front');
+                    }}
+                    onBookNow={() => {
+                      openOneOnOneBookingPopup(oneOnOneAnswers);
+                      setOneOnOneCardState('booking');
+                    }}
+                    onContactLater={() => setOneOnOneCardState('thanks')}
+                    onOpenForm={() => {
+                      setOneOnOneErrorMessage('');
+                      setOneOnOneSubmitState('idle');
+                      setOneOnOneCardState('form');
+                    }}
+                    onSubmit={async () => {
+                      setOneOnOneSubmitState('submitting');
+                      setOneOnOneErrorMessage('');
+
+                      try {
+                        const utmValues = readStoredUtmParams();
+                        const response = await fetch('/api/leads/one-on-one-interest', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            age: oneOnOneAnswers.age,
+                            companyWebsite: oneOnOneAnswers.companyWebsite,
+                            consentToContact: oneOnOneAnswers.consent,
+                            email: oneOnOneAnswers.email,
+                            name: oneOnOneAnswers.name,
+                            phone: oneOnOneAnswers.phone,
+                            ...utmValues,
+                          }),
+                        });
+
+                        if (!response.ok) {
+                          const responseBody = await response.json().catch(() => ({}));
+
+                          if (response.status === 400) {
+                            setOneOnOneErrorMessage(formatQuizApiError(responseBody));
+                            setOneOnOneSubmitState('idle');
+                            return;
+                          }
+
+                          if (response.status === 413) {
+                            setOneOnOneErrorMessage('Your answers are too long. Please shorten them and try again.');
+                            setOneOnOneSubmitState('idle');
+                            return;
+                          }
+
+                          if (response.status === 429) {
+                            const retryAfterSeconds = Number(response.headers.get('Retry-After')) || 600;
+                            setOneOnOneRetryUntil(Date.now() + retryAfterSeconds * 1000);
+                            window.setTimeout(() => setOneOnOneRetryUntil(0), retryAfterSeconds * 1000);
+                            setOneOnOneErrorMessage("You've submitted this a few times. Please wait a few minutes and try again.");
+                            setOneOnOneSubmitState('idle');
+                            return;
+                          }
+
+                          throw new Error('One-on-one lead submission failed');
+                        }
+
+                        setOneOnOneSubmitState('idle');
+                        setOneOnOneCardState('choice');
+                      } catch (error) {
+                        console.error(error);
+                        setOneOnOneSubmitState('error');
+                      }
+                    }}
+                  />
+                ) : (
+                  <motion.div
+                    key={feature.title}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.6, delay: idx * 0.15 }}
+                    className="group relative rounded-[2rem] bg-zinc-900/50 border border-white/5 overflow-hidden hover:border-emerald-500/50 transition-colors duration-500 flex flex-col"
+                  >
+                    <div className="h-64 sm:h-80 relative overflow-hidden shrink-0">
+                      <ImageWithFallback
+                        src={feature.img}
+                        alt={feature.title}
+                        className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-700"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0e] via-zinc-900/40 to-transparent" />
                     </div>
-                    <h3 className="text-3xl font-bold mb-4 text-white">{feature.title}</h3>
-                    <p className="text-zinc-400 text-lg leading-relaxed mb-8">{feature.description}</p>
-                    
-                    <button {...(idx === 1 ? bookingButtonProps : {})} className="inline-flex items-center gap-2 text-emerald-400 font-bold hover:text-emerald-300 transition-colors self-start mt-auto">
-                      {idx === 0 ? "Join the Community" : "Claim Your Guarantee"} <ArrowRight className="w-5 h-5" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="p-8 sm:p-10 flex-grow flex flex-col justify-end bg-gradient-to-b from-[#0d0d0e] to-zinc-900/90">
+                      <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 border border-emerald-500/20">
+                        <feature.icon className="w-7 h-7 text-emerald-400" />
+                      </div>
+                      <h3 className="text-3xl font-bold mb-4 text-white">{feature.title}</h3>
+                      <p className="text-zinc-400 text-lg leading-relaxed mb-8">{feature.description}</p>
+
+                      <button type="button" className="inline-flex items-center gap-2 self-start mt-auto py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                        Join the Community <ArrowRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              )}
             </div>
 
             <motion.div
@@ -681,6 +782,266 @@ function ResultCard({
         </div>
       </div>
     </div>
+  );
+}
+
+type FeatureCard = {
+  title: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  img: string;
+};
+
+type OneOnOneAnswers = typeof initialOneOnOneAnswers;
+
+function OneOnOneFeatureCard({
+  answers,
+  cardState,
+  errorMessage,
+  feature,
+  isSubmitLocked,
+  onAnswerChange,
+  onBack,
+  onBookNow,
+  onContactLater,
+  onOpenForm,
+  onSubmit,
+  submitState,
+}: {
+  answers: OneOnOneAnswers;
+  cardState: 'front' | 'form' | 'choice' | 'booking' | 'thanks';
+  errorMessage: string;
+  feature: FeatureCard;
+  isSubmitLocked: boolean;
+  onAnswerChange: (answers: OneOnOneAnswers) => void;
+  onBack: () => void;
+  onBookNow: () => void;
+  onContactLater: () => void;
+  onOpenForm: () => void;
+  onSubmit: () => void;
+  submitState: 'idle' | 'submitting' | 'error';
+}) {
+  const Icon = feature.icon;
+  const canSubmit = Boolean(answers.name && answers.email && answers.phone && answers.age && answers.consent);
+  const ctaClassName = 'inline-flex items-center gap-2 self-start py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300 disabled:cursor-not-allowed disabled:text-emerald-400/40';
+  const inputClassName = 'w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none transition-colors focus:border-emerald-400';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6, delay: 0.15 }}
+      className="group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border border-white/5 bg-zinc-900/50 transition-colors duration-500 hover:border-emerald-500/50"
+    >
+      <AnimatePresence mode="wait">
+        {cardState === 'front' ? (
+          <motion.div
+            key="front"
+            initial={{ opacity: 0, rotateY: -8 }}
+            animate={{ opacity: 1, rotateY: 0 }}
+            exit={{ opacity: 0, rotateY: 8 }}
+            transition={{ duration: 0.24 }}
+            className="flex h-full flex-col"
+          >
+            <div className="h-64 shrink-0 overflow-hidden sm:h-80">
+              <ImageWithFallback
+                src={feature.img}
+                alt={feature.title}
+                className="h-full w-full object-cover opacity-70 transition-transform duration-700 group-hover:scale-105"
+              />
+              <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-t from-[#0d0d0e] via-zinc-900/40 to-transparent sm:h-80" />
+            </div>
+            <div className="flex flex-grow flex-col justify-end bg-gradient-to-b from-[#0d0d0e] to-zinc-900/90 p-8 sm:p-10">
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10">
+                <Icon className="h-7 w-7 text-emerald-400" />
+              </div>
+              <h3 className="mb-4 text-3xl font-bold text-white">{feature.title}</h3>
+              <p className="mb-8 text-lg leading-relaxed text-zinc-400">{feature.description}</p>
+              <button type="button" onClick={onOpenForm} className={`${ctaClassName} mt-auto`} style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                Claim Your Guarantee <ArrowRight className="h-5 w-5" />
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {cardState === 'form' ? (
+          <motion.div
+            key="form"
+            initial={{ opacity: 0, rotateY: -8 }}
+            animate={{ opacity: 1, rotateY: 0 }}
+            exit={{ opacity: 0, rotateY: 8 }}
+            transition={{ duration: 0.24 }}
+            className="flex h-full flex-col justify-between p-6 sm:p-8"
+          >
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">1:1 onboarding</p>
+              <h3 className="mb-3 text-2xl font-bold tracking-tight text-white">Claim your guarantee</h3>
+              <p className="mb-5 text-sm leading-relaxed text-zinc-400">
+                Share your details first so we can mark this as a priority 1:1 lead before you choose a call slot.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-zinc-300">Name</span>
+                  <input
+                    maxLength={120}
+                    value={answers.name}
+                    onChange={(event) => onAnswerChange({ ...answers, name: event.target.value })}
+                    className={inputClassName}
+                    placeholder="Your name"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-zinc-300">Email</span>
+                  <input
+                    type="email"
+                    maxLength={254}
+                    value={answers.email}
+                    onChange={(event) => onAnswerChange({ ...answers, email: event.target.value })}
+                    className={inputClassName}
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-zinc-300">Phone or WhatsApp</span>
+                  <input
+                    maxLength={40}
+                    value={answers.phone}
+                    onChange={(event) => onAnswerChange({ ...answers, phone: event.target.value })}
+                    className={inputClassName}
+                    placeholder="Your number"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-zinc-300">Age</span>
+                  <input
+                    type="number"
+                    min="13"
+                    max="100"
+                    value={answers.age}
+                    onChange={(event) => onAnswerChange({ ...answers, age: clampAgeInput(event.target.value) })}
+                    className={inputClassName}
+                    placeholder="Age"
+                  />
+                </label>
+              </div>
+              <input
+                name="companyWebsite"
+                autoComplete="off"
+                tabIndex={-1}
+                aria-hidden="true"
+                value={answers.companyWebsite}
+                onChange={(event) => onAnswerChange({ ...answers, companyWebsite: event.target.value })}
+                className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
+              />
+              <label className="mt-4 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={answers.consent}
+                  onChange={(event) => onAnswerChange({ ...answers, consent: event.target.checked })}
+                  className="mt-1 h-4 w-4 accent-emerald-500"
+                />
+                I agree that Animax can contact me about 1:1 onboarding using these details.
+              </label>
+              {errorMessage || submitState === 'error' ? (
+                <p className="mt-4 text-sm text-red-300">{errorMessage || 'Could not save your details. Please try again.'}</p>
+              ) : null}
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-white/10 pt-4 sm:flex-row sm:justify-between">
+              <button type="button" onClick={onBack} className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-white transition-colors hover:text-white/70" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={!canSubmit || submitState === 'submitting' || isSubmitLocked}
+                onClick={onSubmit}
+                className={ctaClassName}
+                style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+              >
+                {submitState === 'submitting' ? 'Saving...' : 'Continue'}
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {cardState === 'choice' ? (
+          <OneOnOneDecisionState
+            key="choice"
+            title="You are on the list."
+            description="Do you want to book your call slot now? Use the same email on Calendly so we can match your booking."
+            primaryLabel="Yes, book my call"
+            secondaryLabel="No, contact me later"
+            onPrimary={onBookNow}
+            onSecondary={onContactLater}
+          />
+        ) : null}
+
+        {cardState === 'booking' ? (
+          <OneOnOneDecisionState
+            key="booking"
+            title="Your booking link is ready."
+            description="If Calendly did not open, use the button below to choose your 1:1 call slot."
+            primaryLabel="Open Calendly"
+            onPrimary={onBookNow}
+          />
+        ) : null}
+
+        {cardState === 'thanks' ? (
+          <motion.div
+            key="thanks"
+            initial={{ opacity: 0, rotateY: -8 }}
+            animate={{ opacity: 1, rotateY: 0 }}
+            exit={{ opacity: 0, rotateY: 8 }}
+            transition={{ duration: 0.24 }}
+            className="flex h-full flex-col items-center justify-center p-8 text-center"
+          >
+            <CheckCircle2 className="mb-5 h-14 w-14 text-emerald-400" />
+            <h3 className="mb-3 text-3xl font-bold text-white">Thank you.</h3>
+            <p className="max-w-sm text-zinc-400">The Animax team will contact you shortly.</p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function OneOnOneDecisionState({
+  description,
+  onPrimary,
+  onSecondary,
+  primaryLabel,
+  secondaryLabel,
+  title,
+}: {
+  description: string;
+  onPrimary: () => void;
+  onSecondary?: () => void;
+  primaryLabel: string;
+  secondaryLabel?: string;
+  title: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, rotateY: -8 }}
+      animate={{ opacity: 1, rotateY: 0 }}
+      exit={{ opacity: 0, rotateY: 8 }}
+      transition={{ duration: 0.24 }}
+      className="flex h-full flex-col items-center justify-center p-8 text-center"
+    >
+      <CheckCircle2 className="mb-5 h-14 w-14 text-emerald-400" />
+      <h3 className="mb-3 text-3xl font-bold text-white">{title}</h3>
+      <p className="mb-8 max-w-sm text-zinc-400">{description}</p>
+      <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row sm:justify-center">
+        <button type="button" onClick={onPrimary} className="rounded-full bg-emerald-500 px-6 py-3 font-bold text-black transition-colors hover:bg-emerald-400">
+          {primaryLabel}
+        </button>
+        {secondaryLabel && onSecondary ? (
+          <button type="button" onClick={onSecondary} className="rounded-full border border-white/10 px-6 py-3 font-bold text-zinc-300 transition-colors hover:bg-white/5 hover:text-white">
+            {secondaryLabel}
+          </button>
+        ) : null}
+      </div>
+    </motion.div>
   );
 }
 
@@ -1065,12 +1426,49 @@ function openBookingPopup() {
     return;
   }
 
+  openCalendlyUrl(bookingUrl);
+}
+
+function openOneOnOneBookingPopup(answers: OneOnOneAnswers) {
+  const bookingTargetUrl = buildOneOnOneBookingUrl(answers);
+  openCalendlyUrl(bookingTargetUrl);
+}
+
+function openCalendlyUrl(url: string) {
   if (window.Calendly) {
-    window.Calendly.initPopupWidget({ url: bookingUrl });
+    window.Calendly.initPopupWidget({ url });
     return;
   }
 
-  window.open(bookingUrl, '_blank', 'noopener,noreferrer');
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function buildOneOnOneBookingUrl(answers: OneOnOneAnswers) {
+  const baseUrl = oneOnOneBookingUrl || bookingUrl || 'https://calendly.com/animaxcoaching/free-call';
+
+  if (!oneOnOneBookingUrl) {
+    console.warn('VITE_CALENDLY_ONE_ON_ONE_URL is not configured. Falling back to the regular booking URL.');
+  }
+
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.set('utm_source', 'animax_website');
+    url.searchParams.set('utm_medium', 'coaching_card');
+    url.searchParams.set('utm_campaign', 'one_on_one_guarantee');
+    url.searchParams.set('utm_content', 'claim_your_guarantee');
+
+    if (answers.name.trim()) {
+      url.searchParams.set('name', answers.name.trim());
+    }
+
+    if (answers.email.trim()) {
+      url.searchParams.set('email', answers.email.trim().toLowerCase());
+    }
+
+    return url.toString();
+  } catch {
+    return baseUrl;
+  }
 }
 
 function persistUtmParams() {

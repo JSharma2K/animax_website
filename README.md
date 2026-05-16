@@ -17,6 +17,7 @@ Required environment variables:
 
 ```bash
 VITE_CAL_LINK=https://calendly.com/animaxcoaching/free-call
+VITE_CALENDLY_ONE_ON_ONE_URL=https://calendly.com/animaxcoaching/one-on-one-guarantee-call
 HUBSPOT_PRIVATE_APP_TOKEN=pat-na1-example
 KV_REST_API_URL=https://example.upstash.io
 KV_REST_API_TOKEN=example-token
@@ -47,3 +48,5 @@ animax_utm_medium
 ```
 
 Booked-call leads are handled by Calendly's native HubSpot integration. Quiz submissions are stored through `POST /api/leads/interest`.
+
+The `Claim Your Guarantee` card stores a hot 1:1 lead through `POST /api/leads/one-on-one-interest` before asking whether the user wants to open the dedicated Calendly event now.
