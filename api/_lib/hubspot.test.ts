@@ -213,6 +213,51 @@ test('upsertOneOnOneHubSpotContact overwrites source and preserves existing note
   );
 });
 
+test('upsertOneOnOneHubSpotContact retries when HubSpot rejects the source option', async () => {
+  process.env.HUBSPOT_PRIVATE_APP_TOKEN = 'test-token';
+  const requests: Array<{ url: string; init: RequestInit; body: any }> = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({
+      url: String(url),
+      init,
+      body: init.body ? JSON.parse(String(init.body)) : undefined,
+    });
+
+    if (String(url).endsWith('/crm/v3/objects/contacts/search')) {
+      return jsonResponse({ results: [] });
+    }
+
+    if (requests.filter((request) => String(request.url).endsWith('/crm/v3/objects/contacts')).length === 1) {
+      return jsonResponse(
+        {
+          category: 'VALIDATION_ERROR',
+          message:
+            'Property values were not valid: [{"name":"animax_lead_source","message":"one_on_one_guarantee was not one of the allowed options"}]',
+        },
+        400
+      );
+    }
+
+    return jsonResponse({ id: 'created-contact' });
+  };
+
+  await upsertOneOnOneHubSpotContact({
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '+1 555 123',
+    age: '32',
+    consentToContact: true,
+  });
+
+  const retryProperties = requests[2].body.properties;
+  assert.equal(requests.length, 3);
+  assert.equal(retryProperties.email, 'jane@example.com');
+  assert.equal(retryProperties.phone, '+1 555 123');
+  assert.equal(retryProperties.animax_notes, 'Requested 1:1 Guarantee Call from coaching card.');
+  assert.equal(retryProperties.animax_lead_source, undefined);
+});
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,

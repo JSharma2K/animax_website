@@ -30,6 +30,14 @@ const HUBSPOT_TOKEN_ENV = 'HUBSPOT_PRIVATE_APP_TOKEN';
 const ONE_ON_ONE_LEAD_SOURCE = 'one_on_one_guarantee';
 const ONE_ON_ONE_NOTE = 'Requested 1:1 Guarantee Call from coaching card.';
 const MAX_NOTES_LENGTH = 3000;
+const ONE_ON_ONE_RETRYABLE_PROPERTIES = new Set([
+  'animax_age',
+  'animax_consent_to_contact',
+  'animax_lead_source',
+  'animax_notes',
+  'animax_utm_medium',
+  'animax_utm_source',
+]);
 
 export class MissingHubSpotPropertyError extends Error {
   constructor(public propertyName?: string) {
@@ -71,18 +79,19 @@ export async function upsertOneOnOneHubSpotContact(input: OneOnOneLeadInput) {
     throw new Error(`Missing ${HUBSPOT_TOKEN_ENV}`);
   }
 
-  const existing = await findContactByEmail(input.email, token, ['email', 'animax_notes']);
+  const existing = await findOneOnOneContactByEmail(input.email, token);
 
   try {
     if (existing?.id) {
-      return await updateContact(
+      return await writeOneOnOneContact(
+        'update',
         existing.id,
         buildOneOnOneUpdateContactProperties(input, existing.properties?.animax_notes),
         token
       );
     }
 
-    return await createContact(buildOneOnOneCreateContactProperties(input), token);
+    return await writeOneOnOneContact('create', undefined, buildOneOnOneCreateContactProperties(input), token);
   } catch (error) {
     const missingPropertyName = getMissingPropertyName(error);
 
@@ -92,6 +101,58 @@ export async function upsertOneOnOneHubSpotContact(input: OneOnOneLeadInput) {
 
     throw error;
   }
+}
+
+async function findOneOnOneContactByEmail(email: string, token: string) {
+  try {
+    return await findContactByEmail(email, token, ['email', 'animax_notes']);
+  } catch (error) {
+    const missingPropertyName = getMissingPropertyName(error);
+
+    if (missingPropertyName !== 'animax_notes') {
+      throw error;
+    }
+
+    console.warn('One-on-one HubSpot lookup omitted unavailable property', {
+      propertyName: missingPropertyName,
+    });
+    return findContactByEmail(email, token, ['email']);
+  }
+}
+
+async function writeOneOnOneContact(
+  operation: 'create' | 'update',
+  contactId: string | undefined,
+  properties: ContactProperties,
+  token: string
+) {
+  const remainingProperties = { ...properties };
+  const omittedProperties: string[] = [];
+
+  for (let attempt = 0; attempt <= ONE_ON_ONE_RETRYABLE_PROPERTIES.size; attempt += 1) {
+    try {
+      if (operation === 'update' && contactId) {
+        return await updateContact(contactId, compactProperties(remainingProperties), token);
+      }
+
+      return await createContact(compactProperties(remainingProperties), token);
+    } catch (error) {
+      const propertyName = getRetryableOneOnOnePropertyName(error, remainingProperties);
+
+      if (!propertyName) {
+        throw error;
+      }
+
+      omittedProperties.push(propertyName);
+      delete remainingProperties[propertyName];
+      console.warn('One-on-one HubSpot write retrying without rejected property', {
+        propertyName,
+        omittedProperties,
+      });
+    }
+  }
+
+  throw new Error('HubSpot one-on-one contact write exhausted retries');
 }
 
 function buildCreateContactProperties(input: LeadInput) {
@@ -299,6 +360,58 @@ function getMissingPropertyName(error: unknown) {
 
   const match = body.message?.match(/Property "([^"]+)" does not exist/i);
   return match?.[1];
+}
+
+function getRetryableOneOnOnePropertyName(error: unknown, properties: ContactProperties) {
+  const propertyName = getHubSpotValidationPropertyName(error);
+
+  if (propertyName && ONE_ON_ONE_RETRYABLE_PROPERTIES.has(propertyName) && propertyName in properties) {
+    return propertyName;
+  }
+
+  const missingPropertyName = getMissingPropertyName(error);
+
+  if (
+    missingPropertyName &&
+    ONE_ON_ONE_RETRYABLE_PROPERTIES.has(missingPropertyName) &&
+    missingPropertyName in properties
+  ) {
+    return missingPropertyName;
+  }
+
+  const body = (error as Error & { body?: HubSpotErrorBody }).body;
+  const message = body?.message ?? '';
+
+  if (body?.category === 'VALIDATION_ERROR' && message) {
+    return [...ONE_ON_ONE_RETRYABLE_PROPERTIES].find(
+      (candidate) => candidate in properties && message.includes(candidate)
+    );
+  }
+
+  return undefined;
+}
+
+function getHubSpotValidationPropertyName(error: unknown) {
+  const body = (error as Error & { body?: HubSpotErrorBody }).body;
+
+  if (body?.category !== 'VALIDATION_ERROR') {
+    return undefined;
+  }
+
+  const contextPropertyName = body.errors
+    ?.map((item) => item.context?.propertyName)
+    .find((value): value is string | string[] => typeof value === 'string' || Array.isArray(value));
+
+  if (Array.isArray(contextPropertyName)) {
+    return contextPropertyName[0];
+  }
+
+  if (typeof contextPropertyName === 'string') {
+    return contextPropertyName;
+  }
+
+  const invalidPropertyMatch = body.message?.match(/property(?:Name)?[^\w]+([a-z0-9_]+)/i);
+  return invalidPropertyMatch?.[1];
 }
 
 function getRetryAfterMs(value: string | null) {
