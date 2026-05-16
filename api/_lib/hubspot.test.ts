@@ -213,6 +213,46 @@ test('upsertOneOnOneHubSpotContact overwrites source and preserves existing note
   );
 });
 
+test('upsertOneOnOneHubSpotContact handles null existing notes on update', async () => {
+  process.env.HUBSPOT_PRIVATE_APP_TOKEN = 'test-token';
+  const requests: Array<{ url: string; init: RequestInit; body: any }> = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({
+      url: String(url),
+      init,
+      body: init.body ? JSON.parse(String(init.body)) : undefined,
+    });
+
+    if (String(url).endsWith('/crm/v3/objects/contacts/search')) {
+      return jsonResponse({
+        results: [
+          {
+            id: 'existing-contact',
+            properties: {
+              email: 'jane@example.com',
+              animax_notes: null,
+            },
+          },
+        ],
+      });
+    }
+
+    return jsonResponse({ id: 'existing-contact' });
+  };
+
+  await upsertOneOnOneHubSpotContact({
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    phone: '+1 555 123',
+    age: '33',
+    consentToContact: true,
+  });
+
+  const updateProperties = requests[1].body.properties;
+  assert.equal(updateProperties.animax_notes, 'Requested 1:1 Guarantee Call from coaching card.');
+});
+
 test('upsertOneOnOneHubSpotContact retries when HubSpot rejects the source option', async () => {
   process.env.HUBSPOT_PRIVATE_APP_TOKEN = 'test-token';
   const requests: Array<{ url: string; init: RequestInit; body: any }> = [];

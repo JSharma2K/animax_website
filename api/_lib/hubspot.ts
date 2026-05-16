@@ -268,8 +268,8 @@ async function createContact(properties: ContactProperties, token: string) {
   });
 }
 
-function mergeOneOnOneNotes(existingNotes = '') {
-  const trimmedExistingNotes = existingNotes.trim();
+function mergeOneOnOneNotes(existingNotes?: string | null) {
+  const trimmedExistingNotes = typeof existingNotes === 'string' ? existingNotes.trim() : '';
 
   if (!trimmedExistingNotes) {
     return ONE_ON_ONE_NOTE;
