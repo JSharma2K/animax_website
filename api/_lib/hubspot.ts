@@ -1,4 +1,9 @@
 type ContactProperties = Record<string, string | undefined>;
+type HubSpotContactProperties = Record<string, string | undefined>;
+type HubSpotContact = {
+  id?: string;
+  properties?: HubSpotContactProperties;
+};
 
 type LeadInput = {
   name?: string;
@@ -258,7 +263,7 @@ async function findContactByEmail(email: string, token: string, properties: stri
     }),
   });
 
-  return response.results?.[0] as { id?: string; properties?: Record<string, string | undefined> } | undefined;
+  return normalizeHubSpotContact(response.results?.[0]);
 }
 
 async function createContact(properties: ContactProperties, token: string) {
@@ -268,8 +273,8 @@ async function createContact(properties: ContactProperties, token: string) {
   });
 }
 
-function mergeOneOnOneNotes(existingNotes?: string | null) {
-  const trimmedExistingNotes = typeof existingNotes === 'string' ? existingNotes.trim() : '';
+function mergeOneOnOneNotes(existingNotes?: string) {
+  const trimmedExistingNotes = safeTrim(existingNotes);
 
   if (!trimmedExistingNotes) {
     return ONE_ON_ONE_NOTE;
@@ -322,8 +327,8 @@ function compactProperties(properties: ContactProperties) {
   );
 }
 
-function splitName(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+function splitName(name?: string) {
+  const parts = safeTrim(name).split(/\s+/).filter(Boolean);
 
   if (parts.length === 0) {
     return { firstname: undefined, lastname: undefined };
@@ -426,6 +431,51 @@ function getRetryAfterMs(value: string | null) {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeHubSpotContact(value: unknown): HubSpotContact | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as { id?: unknown; properties?: unknown };
+
+  return {
+    id: normalizeHubSpotPropertyValue(record.id),
+    properties: normalizeHubSpotContactProperties(record.properties),
+  };
+}
+
+function normalizeHubSpotContactProperties(value: unknown): HubSpotContactProperties | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, entry]) => [key, normalizeHubSpotPropertyValue(entry)] as const)
+      .filter(([, entry]) => entry !== undefined)
+  );
+}
+
+function normalizeHubSpotPropertyValue(value: unknown) {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+
+  return undefined;
+}
+
+function safeTrim(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 type HubSpotErrorBody = {

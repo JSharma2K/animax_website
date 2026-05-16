@@ -230,8 +230,11 @@ test('upsertOneOnOneHubSpotContact handles null existing notes on update', async
           {
             id: 'existing-contact',
             properties: {
-              email: 'jane@example.com',
+              email: null,
+              phone: null,
+              animax_age: null,
               animax_notes: null,
+              animax_lead_source: null,
             },
           },
         ],
