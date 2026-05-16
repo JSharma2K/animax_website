@@ -162,13 +162,27 @@ export default function App() {
   const features = [
     {
       title: "Join Our Transformation Pod",
-      description: "Evolve and transform with an elite dedicated gym community.",
+      description: "Transform alongside the Animax community:",
+      bullets: [
+        "Train with a focused gym community",
+        "Get Animax coach guidance for training and nutrition",
+        "Top 3 transformations win an Animax Stack",
+      ],
       icon: Users2,
       img: "https://images.unsplash.com/photo-1770513649465-2c60c8039806?auto=format&fit=crop&q=80&w=1080"
     },
     {
-      title: "Ready to take things to the next level?",
-      description: "Sign up for 1-1 coaching. Book a free call with our expert with a promised 100% money back guarantee.",
+      title: "1:1 Serious Coaching",
+      description: "Work one-on-one with the Animax team on:",
+      bullets: [
+        "Training",
+        "Nutrition",
+        "Check-ins",
+        "Accountability",
+        "Bloodwork",
+        "Supplements",
+        "Mental training sessions",
+      ],
       icon: PhoneCall,
       img: "https://images.unsplash.com/photo-1695892046204-ec2962b26b48?auto=format&fit=crop&q=80&w=1080"
     }
@@ -363,16 +377,16 @@ export default function App() {
             <div className="relative aspect-video rounded-[2rem] overflow-hidden bg-zinc-900 border border-white/10 shadow-2xl">
               {!isVideoPlaying ? (
                 <>
-                  <ImageWithFallback 
-                    src="https://images.unsplash.com/photo-1679236703546-8a26e1d83918?auto=format&fit=crop&q=80&w=1920" 
+                  <ImageWithFallback
+                    src="https://images.unsplash.com/photo-1679236703546-8a26e1d83918?auto=format&fit=crop&q=80&w=1920"
                     alt="Animax Video Thumbnail"
                     className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                  
+
                   {/* Play Button Overlay */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <motion.div 
+                    <motion.div
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
                       className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.4)] backdrop-blur-md transition-all duration-300"
@@ -380,7 +394,7 @@ export default function App() {
                       <Play className="w-10 h-10 ml-1.5 text-black" fill="currentColor" />
                     </motion.div>
                   </div>
-                  
+
                   {/* Bottom Info Overlay */}
                   <div className="absolute bottom-0 left-0 w-full p-8 md:p-12">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -388,7 +402,7 @@ export default function App() {
                         <h3 className="text-2xl md:text-4xl font-bold tracking-tight text-white mb-2">See how our coaching transforms lives</h3>
                         <p className="text-zinc-400 text-lg">2 minute walkthrough of what to expect</p>
                       </div>
-                      <div className="flex items-center gap-2 text-emerald-400 font-semibold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 backdrop-blur-md">
+                      <div className="flex items-center gap-2 py-2 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                         <Play className="w-4 h-4" fill="currentColor" /> Watch Video
                       </div>
                     </div>
@@ -541,7 +555,7 @@ export default function App() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.6, delay: idx * 0.15 }}
-                    className="group relative rounded-[2rem] bg-zinc-900/50 border border-white/5 overflow-hidden hover:border-emerald-500/50 transition-colors duration-500 flex flex-col"
+                    className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-zinc-900/50 transition-colors duration-500 hover:border-emerald-400/60"
                   >
                     <div className="h-64 sm:h-80 relative overflow-hidden shrink-0">
                       <ImageWithFallback
@@ -556,7 +570,17 @@ export default function App() {
                         <feature.icon className="w-7 h-7 text-emerald-400" />
                       </div>
                       <h3 className="text-3xl font-bold mb-4 text-white">{feature.title}</h3>
-                      <p className="text-zinc-400 text-lg leading-relaxed mb-8">{feature.description}</p>
+                      <p className={`${feature.bullets ? 'mb-4' : 'mb-8'} text-zinc-400 text-lg leading-relaxed`}>{feature.description}</p>
+                      {feature.bullets ? (
+                        <ul className="mb-8 space-y-3 text-sm leading-relaxed text-zinc-300">
+                          {feature.bullets.map((item) => (
+                            <li key={item} className="flex items-start gap-3">
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
 
                       <button type="button" className="inline-flex items-center gap-2 self-start mt-auto py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                         Join the Community <ArrowRight className="w-5 h-5" />
@@ -788,6 +812,7 @@ function ResultCard({
 type FeatureCard = {
   title: string;
   description: string;
+  bullets?: string[];
   icon: ComponentType<{ className?: string }>;
   img: string;
 };
@@ -832,8 +857,10 @@ function OneOnOneFeatureCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6, delay: 0.15 }}
-      className="group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border border-white/5 bg-zinc-900/50 transition-colors duration-500 hover:border-emerald-500/50"
+      className="group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-zinc-900/50 shadow-[0_0_42px_rgba(52,211,153,0.12)] transition-colors duration-500 hover:border-emerald-400/60"
     >
+      <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-br from-emerald-400/20 via-emerald-400/10 to-transparent opacity-70" />
+      <div className="pointer-events-none absolute inset-0 rounded-[2rem] ring-1 ring-inset ring-emerald-400/10" />
       <AnimatePresence mode="wait">
         {cardState === 'front' ? (
           <motion.div
@@ -857,9 +884,19 @@ function OneOnOneFeatureCard({
                 <Icon className="h-7 w-7 text-emerald-400" />
               </div>
               <h3 className="mb-4 text-3xl font-bold text-white">{feature.title}</h3>
-              <p className="mb-8 text-lg leading-relaxed text-zinc-400">{feature.description}</p>
+              <p className="mb-4 text-lg leading-relaxed text-zinc-400">{feature.description}</p>
+              {feature.bullets ? (
+                <ul className="mb-8 grid gap-2 text-sm text-zinc-300 sm:grid-cols-2">
+                  {feature.bullets.map((item) => (
+                    <li key={item} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <button type="button" onClick={onOpenForm} className={`${ctaClassName} mt-auto`} style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                Claim Your Guarantee <ArrowRight className="h-5 w-5" />
+                Claim Your Future <ArrowRight className="h-5 w-5" />
               </button>
             </div>
           </motion.div>
@@ -876,7 +913,7 @@ function OneOnOneFeatureCard({
           >
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">1:1 onboarding</p>
-              <h3 className="mb-3 text-2xl font-bold tracking-tight text-white">Claim your guarantee</h3>
+              <h3 className="mb-3 text-2xl font-bold tracking-tight text-white">Claim your future</h3>
               <p className="mb-5 text-sm leading-relaxed text-zinc-400">
                 Share your details first so we can mark this as a priority 1:1 lead before you choose a call slot.
               </p>
@@ -1032,11 +1069,21 @@ function OneOnOneDecisionState({
       <h3 className="mb-3 text-3xl font-bold text-white">{title}</h3>
       <p className="mb-8 max-w-sm text-zinc-400">{description}</p>
       <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row sm:justify-center">
-        <button type="button" onClick={onPrimary} className="rounded-full bg-emerald-500 px-6 py-3 font-bold text-black transition-colors hover:bg-emerald-400">
+        <button
+          type="button"
+          onClick={onPrimary}
+          className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300"
+          style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+        >
           {primaryLabel}
         </button>
         {secondaryLabel && onSecondary ? (
-          <button type="button" onClick={onSecondary} className="rounded-full border border-white/10 px-6 py-3 font-bold text-zinc-300 transition-colors hover:bg-white/5 hover:text-white">
+          <button
+            type="button"
+            onClick={onSecondary}
+            className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-white transition-colors hover:text-white/70"
+            style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+          >
             {secondaryLabel}
           </button>
         ) : null}
@@ -1171,7 +1218,11 @@ function TransformationQuiz({
                           </a>
                         ))}
                       </div>
-                      <button {...{ onClick: openBookingPopup }} className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-colors hover:bg-emerald-400">
+                      <button
+                        {...{ onClick: openBookingPopup }}
+                        className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300"
+                        style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      >
                         Book a Free Call
                       </button>
                     </motion.div>

@@ -49,4 +49,4 @@ animax_utm_medium
 
 Booked-call leads are handled by Calendly's native HubSpot integration. Quiz submissions are stored through `POST /api/leads/interest`.
 
-The `Claim Your Guarantee` card stores a hot 1:1 lead through `POST /api/leads/one-on-one-interest` before asking whether the user wants to open the dedicated Calendly event now.
+The `Claim Your Future` card stores a hot 1:1 lead through `POST /api/leads/one-on-one-interest` before asking whether the user wants to open the dedicated Calendly event now.
