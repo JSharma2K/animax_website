@@ -36,6 +36,8 @@ Recommended HubSpot custom contact properties:
 animax_lead_source
 animax_age
 animax_gender
+animax_weight
+animax_height
 animax_primary_goal
 animax_notes
 animax_consent_to_contact

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useScroll, useTransform } from 'motion/react';
-import { Play, CheckCircle2, Users2, ArrowRight, PhoneCall, ShieldCheck, Menu, X, Target, CalendarCheck, Flame, TrendingUp } from 'lucide-react';
+import { Play, CheckCircle2, Users2, ArrowRight, PhoneCall, ShieldCheck, Menu, X, Target, CalendarCheck, Flame, TrendingUp, Download } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
 import Lenis from 'lenis';
@@ -23,9 +23,26 @@ const quizQuestions = [
   'Are you ready to be coached instead of guessing what to do next?',
 ];
 
+const quizDownloadFiles = [
+  {
+    title: '3-week diet plan',
+    href: '/downloads/animax-3-week-diet-plan.pdf',
+  },
+  {
+    title: '3-week workout plan',
+    href: '/downloads/animax-3-week-workout-plan.pdf',
+  },
+  {
+    title: '3-week supplement stack',
+    href: '/downloads/animax-3-week-supplement-stack.pdf',
+  },
+];
+
 const initialQuizAnswers = {
   age: '',
   gender: '',
+  weight: '',
+  height: '',
   name: '',
   email: '',
   phone: '',
@@ -557,7 +574,7 @@ export default function App() {
         step={quizStep}
         onAnswerChange={setQuizAnswers}
         onClose={() => setIsQuizOpen(false)}
-        onNext={() => setQuizStep((step) => Math.min(step + 1, 2))}
+        onNext={() => setQuizStep((step) => Math.min(step + 1, quizQuestions.length))}
         onPrevious={() => setQuizStep((step) => Math.max(step - 1, 0))}
         onSubmit={async () => {
           setQuizState('submitting');
@@ -573,6 +590,8 @@ export default function App() {
                 primaryGoal: quizAnswers.goal,
                 age: quizAnswers.age,
                 gender: quizAnswers.gender,
+                weight: quizAnswers.weight,
+                height: quizAnswers.height,
                 notes: quizQuestions
                   .map((question, index) => `${question} ${quizAnswers.answers[index] || 'Not answered'}`)
                   .join('\n'),
@@ -655,12 +674,28 @@ function TransformationQuiz({
   state: 'idle' | 'submitting' | 'success' | 'error';
   step: number;
 }) {
+  const detailsStep = quizQuestions.length;
+  const totalSteps = quizQuestions.length + 1;
+  const isDetailsStep = step >= detailsStep;
+  const scrollContainerClassName = [
+    'min-h-0 flex-1 overscroll-contain px-6 sm:px-10',
+    isDetailsStep
+      ? 'overflow-y-scroll pb-32 sm:pb-36 [scrollbar-color:rgba(52,211,153,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-white/5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-emerald-400/60 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-300/80'
+      : 'overflow-y-auto pb-8',
+  ].join(' ');
   const canContinue =
-    step === 0
-      ? answers.answers.every(Boolean)
-      : step === 1
-        ? Boolean(answers.age && answers.gender)
-        : Boolean(answers.name && answers.email && answers.goal && answers.consent);
+    step < detailsStep
+      ? Boolean(answers.answers[step])
+      : Boolean(
+          answers.name &&
+          answers.email &&
+          answers.age &&
+          answers.gender &&
+          answers.weight &&
+          answers.height &&
+          answers.goal &&
+          answers.consent
+        );
 
   return (
     <AnimatePresence>
@@ -672,7 +707,7 @@ function TransformationQuiz({
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#090909] shadow-[0_0_60px_rgba(16,185,129,0.18)] sm:max-h-[calc(100dvh-4rem)]"
+            className="relative flex h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#090909] shadow-[0_0_60px_rgba(16,185,129,0.18)] sm:h-[calc(100dvh-4rem)]"
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.96 }}
@@ -688,101 +723,88 @@ function TransformationQuiz({
               <X className="h-5 w-5" />
             </button>
 
-            <div className="overflow-y-auto p-6 sm:p-10">
-              <div className="mb-8 flex items-center justify-between gap-4 pr-12">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="shrink-0 px-6 pt-6 sm:px-10 sm:pt-10">
+                <div className="mb-8 flex items-center justify-between gap-4 pr-12">
                 <div>
                   <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">Transformation check</p>
                   <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Quick body reset quiz</h2>
+                  <p className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-400">
+                    Finish it to unlock a free downloadable 3-week diet, workout, and supplement stack.
+                  </p>
                 </div>
-                <div className="hidden rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 sm:block">
-                  {step + 1}/3
+                <div className="hidden text-sm font-bold text-emerald-400 sm:block">
+                  {Math.min(step + 1, totalSteps)}/{totalSteps}
                 </div>
               </div>
 
-              <div className="mb-8 grid grid-cols-3 gap-2">
-                {[0, 1, 2].map((item) => (
-                  <div key={item} className={`h-1.5 rounded-full ${item <= step ? 'bg-emerald-400' : 'bg-white/10'}`} />
-                ))}
+                <div className="mb-8 grid gap-2" style={{ gridTemplateColumns: `repeat(${totalSteps}, minmax(0, 1fr))` }}>
+                  {Array.from({ length: totalSteps }).map((_, item) => (
+                    <div key={item} className={`h-1.5 rounded-full ${item <= step ? 'bg-emerald-400' : 'bg-white/10'}`} />
+                  ))}
+                </div>
               </div>
 
-              <AnimatePresence mode="wait">
-                {state === 'success' ? (
-                  <motion.div
-                    key="success"
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    className="py-8 text-center"
-                  >
-                    <CheckCircle2 className="mx-auto mb-5 h-14 w-14 text-emerald-400" />
-                    <h3 className="mb-3 text-3xl font-bold text-white">You are on the list.</h3>
-                    <p className="mx-auto mb-8 max-w-md text-zinc-400">We saved your answers. If you want the fastest path, book a free call and we will map the first steps with you.</p>
-                    <button {...{ onClick: openBookingPopup }} className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-colors hover:bg-emerald-400">
-                      Book a Free Call
-                    </button>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key={step}
-                    initial={{ opacity: 0, x: 22 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -22 }}
-                    transition={{ duration: 0.22 }}
-                  >
-                    {step === 0 ? (
-                      <div className="space-y-4">
-                        {quizQuestions.map((question, index) => (
-                          <div key={question} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                            <p className="mb-4 text-base font-semibold text-white sm:text-lg">{question}</p>
-                            <div className="grid grid-cols-2 gap-3">
-                              {['Yes', 'No'].map((option) => (
-                                <button
-                                  key={option}
-                                  type="button"
-                                  onClick={() => {
-                                    const nextAnswers = [...answers.answers];
-                                    nextAnswers[index] = option;
-                                    onAnswerChange({ ...answers, answers: nextAnswers });
-                                  }}
-                                  className={`rounded-full border px-4 py-3 font-bold transition-all ${
-                                    answers.answers[index] === option
-                                      ? 'border-emerald-400 bg-emerald-500 text-black'
-                                      : 'border-white/10 bg-white/5 text-zinc-200 hover:border-emerald-400/70'
-                                  }`}
-                                >
-                                  {option}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
+              <div data-lenis-prevent className={scrollContainerClassName}>
+                <AnimatePresence mode="wait">
+                  {state === 'success' ? (
+                    <motion.div
+                      key="success"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      className="py-8 text-center"
+                    >
+                      <CheckCircle2 className="mx-auto mb-5 h-14 w-14 text-emerald-400" />
+                      <h3 className="mb-3 text-3xl font-bold text-white">Your free stack is ready.</h3>
+                      <p className="mx-auto mb-8 max-w-lg text-zinc-400">
+                        Download your 3-week diet, workout, and supplement stack below. Drop the PDFs into <span className="font-mono text-emerald-300">public/downloads</span> later using these filenames and the buttons will serve them automatically.
+                      </p>
+                      <div className="mx-auto mb-8 grid max-w-lg gap-3 sm:grid-cols-3">
+                        {quizDownloadFiles.map((file) => (
+                          <a
+                            key={file.href}
+                            href={file.href}
+                            download
+                            className="group flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400/60 hover:bg-emerald-500/10"
+                          >
+                            <Download className="h-5 w-5 transition-transform group-hover:-translate-y-0.5" />
+                            {file.title}
+                          </a>
                         ))}
                       </div>
-                    ) : null}
-
-                    {step === 1 ? (
-                      <div className="space-y-5">
-                        <label className="block">
-                          <span className="mb-2 block text-sm font-semibold text-zinc-300">Age</span>
-                          <input
-                            type="number"
-                            min="13"
-                            max="100"
-                            value={answers.age}
-                            onChange={(event) => onAnswerChange({ ...answers, age: event.target.value })}
-                            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
-                            placeholder="Enter your age"
-                          />
-                        </label>
-                        <div>
-                          <span className="mb-3 block text-sm font-semibold text-zinc-300">Gender</span>
-                          <div className="grid gap-3 sm:grid-cols-3">
-                            {['Female', 'Male', 'Prefer not to say'].map((option) => (
+                      <button {...{ onClick: openBookingPopup }} className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-colors hover:bg-emerald-400">
+                        Book a Free Call
+                      </button>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={step}
+                      initial={{ opacity: 0, x: 22 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -22 }}
+                      transition={{ duration: 0.22 }}
+                    >
+                      {step < detailsStep ? (
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8">
+                          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">
+                            Question {step + 1}
+                          </p>
+                          <h3 className="mb-8 text-2xl font-bold leading-tight text-white sm:text-3xl">
+                            {quizQuestions[step]}
+                          </h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            {['Yes', 'No'].map((option) => (
                               <button
                                 key={option}
                                 type="button"
-                                onClick={() => onAnswerChange({ ...answers, gender: option })}
-                                className={`min-h-14 rounded-2xl border px-4 py-3 font-bold transition-all ${
-                                  answers.gender === option
+                                onClick={() => {
+                                  const nextAnswers = [...answers.answers];
+                                  nextAnswers[step] = option;
+                                  onAnswerChange({ ...answers, answers: nextAnswers });
+                                }}
+                                className={`min-h-16 rounded-2xl border px-4 py-4 text-lg font-bold transition-all ${
+                                  answers.answers[step] === option
                                     ? 'border-emerald-400 bg-emerald-500 text-black'
                                     : 'border-white/10 bg-white/5 text-zinc-200 hover:border-emerald-400/70'
                                 }`}
@@ -792,80 +814,140 @@ function TransformationQuiz({
                             ))}
                           </div>
                         </div>
-                      </div>
-                    ) : null}
-
-                    {step === 2 ? (
-                      <div className="space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
+                      ) : (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">Final details</p>
+                            <h3 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
+                              Where should we send your free 3-week stack?
+                            </h3>
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="block">
+                              <span className="mb-2 block text-sm font-semibold text-zinc-300">Name</span>
+                              <input
+                                value={answers.name}
+                                onChange={(event) => onAnswerChange({ ...answers, name: event.target.value })}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                                placeholder="Your name"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-2 block text-sm font-semibold text-zinc-300">Email</span>
+                              <input
+                                type="email"
+                                value={answers.email}
+                                onChange={(event) => onAnswerChange({ ...answers, email: event.target.value })}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                                placeholder="you@example.com"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-2 block text-sm font-semibold text-zinc-300">Age</span>
+                              <input
+                                type="number"
+                                min="13"
+                                max="100"
+                                value={answers.age}
+                                onChange={(event) => onAnswerChange({ ...answers, age: event.target.value })}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                                placeholder="Age"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-2 block text-sm font-semibold text-zinc-300">Weight</span>
+                              <input
+                                value={answers.weight}
+                                onChange={(event) => onAnswerChange({ ...answers, weight: event.target.value })}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                                placeholder="Example: 78 kg"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-2 block text-sm font-semibold text-zinc-300">Height</span>
+                              <input
+                                value={answers.height}
+                                onChange={(event) => onAnswerChange({ ...answers, height: event.target.value })}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                                placeholder="Example: 5'10 or 178 cm"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-2 block text-sm font-semibold text-zinc-300">Phone or WhatsApp</span>
+                              <input
+                                value={answers.phone}
+                                onChange={(event) => onAnswerChange({ ...answers, phone: event.target.value })}
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                                placeholder="Optional"
+                              />
+                            </label>
+                          </div>
+                          <div>
+                            <span className="mb-3 block text-sm font-semibold text-zinc-300">Gender</span>
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              {['Female', 'Male', 'Prefer not to say'].map((option) => (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  onClick={() => onAnswerChange({ ...answers, gender: option })}
+                                  className={`min-h-14 rounded-2xl border px-4 py-3 font-bold transition-all ${
+                                    answers.gender === option
+                                      ? 'border-emerald-400 bg-emerald-500 text-black'
+                                      : 'border-white/10 bg-white/5 text-zinc-200 hover:border-emerald-400/70'
+                                  }`}
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-zinc-300">Name</span>
-                            <input
-                              value={answers.name}
-                              onChange={(event) => onAnswerChange({ ...answers, name: event.target.value })}
-                              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
-                              placeholder="Your name"
+                            <span className="mb-2 block text-sm font-semibold text-zinc-300">Biggest goal right now</span>
+                            <textarea
+                              value={answers.goal}
+                              onChange={(event) => onAnswerChange({ ...answers, goal: event.target.value })}
+                              className="min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
+                              placeholder="Example: lose fat, build muscle, feel confident again"
                             />
                           </label>
-                          <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-zinc-300">Email</span>
+                          <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
                             <input
-                              type="email"
-                              value={answers.email}
-                              onChange={(event) => onAnswerChange({ ...answers, email: event.target.value })}
-                              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
-                              placeholder="you@example.com"
+                              type="checkbox"
+                              checked={answers.consent}
+                              onChange={(event) => onAnswerChange({ ...answers, consent: event.target.checked })}
+                              className="mt-1 h-4 w-4 accent-emerald-500"
                             />
+                            I agree that Animax can contact me and send my free 3-week diet, workout, and supplement stack using these details.
                           </label>
                         </div>
-                        <label className="block">
-                          <span className="mb-2 block text-sm font-semibold text-zinc-300">Phone or WhatsApp</span>
-                          <input
-                            value={answers.phone}
-                            onChange={(event) => onAnswerChange({ ...answers, phone: event.target.value })}
-                            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
-                            placeholder="Optional"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-2 block text-sm font-semibold text-zinc-300">Biggest goal right now</span>
-                          <textarea
-                            value={answers.goal}
-                            onChange={(event) => onAnswerChange({ ...answers, goal: event.target.value })}
-                            className="min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-white outline-none transition-colors focus:border-emerald-400"
-                            placeholder="Example: lose fat, build muscle, feel confident again"
-                          />
-                        </label>
-                        <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
-                          <input
-                            type="checkbox"
-                            checked={answers.consent}
-                            onChange={(event) => onAnswerChange({ ...answers, consent: event.target.checked })}
-                            className="mt-1 h-4 w-4 accent-emerald-500"
-                          />
-                          I agree that Animax can contact me about coaching using these details.
-                        </label>
-                      </div>
-                    ) : null}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {state === 'error' ? (
+                  <p className="mt-4 text-sm text-red-300">Could not save this locally. On Vercel, this uses the HubSpot API route.</p>
+                ) : null}
+              </div>
 
               {state !== 'success' ? (
-                <div className="sticky -bottom-6 -mx-6 mt-8 flex flex-col-reverse gap-3 border-t border-white/10 bg-[#090909]/95 px-6 py-4 backdrop-blur sm:-bottom-10 sm:-mx-10 sm:flex-row sm:justify-between sm:px-10">
+                <div
+                  className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 bg-[#090909]/95 px-6 py-4 backdrop-blur sm:flex-row sm:justify-between sm:px-10"
+                  style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                >
                   <button
                     type="button"
                     onClick={step === 0 ? onClose : onPrevious}
-                    className="rounded-full border border-white/10 px-6 py-3 font-bold text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+                    className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-white transition-colors hover:text-white/70"
                   >
                     {step === 0 ? 'Close' : 'Back'}
                   </button>
-                  {step < 2 ? (
+                  {step < detailsStep ? (
                     <button
                       type="button"
                       disabled={!canContinue}
                       onClick={onNext}
-                      className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                      className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300 disabled:cursor-not-allowed disabled:text-emerald-400/40"
                     >
                       Continue
                     </button>
@@ -874,16 +956,12 @@ function TransformationQuiz({
                       type="button"
                       disabled={!canContinue || state === 'submitting'}
                       onClick={onSubmit}
-                      className="rounded-full bg-emerald-500 px-7 py-3 font-bold text-black transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                      className="py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300 disabled:cursor-not-allowed disabled:text-emerald-400/40"
                     >
-                      {state === 'submitting' ? 'Saving...' : 'See My Next Step'}
+                      {state === 'submitting' ? 'Saving...' : 'Unlock My Free Stack'}
                     </button>
                   )}
                 </div>
-              ) : null}
-
-              {state === 'error' ? (
-                <p className="mt-4 text-sm text-red-300">Could not save this locally. On Vercel, this uses the HubSpot API route.</p>
               ) : null}
             </div>
           </motion.div>

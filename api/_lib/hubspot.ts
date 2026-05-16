@@ -6,6 +6,8 @@ type LeadInput = {
   phone?: string;
   age?: string;
   gender?: string;
+  weight?: string;
+  height?: string;
   primaryGoal?: string;
   notes?: string;
   consentToContact?: boolean;
@@ -63,6 +65,8 @@ function buildContactProperties(input: LeadInput) {
     animax_lead_source: input.source,
     animax_age: input.age,
     animax_gender: input.gender,
+    animax_weight: input.weight,
+    animax_height: input.height,
     animax_primary_goal: input.primaryGoal,
     animax_notes: input.notes,
     animax_consent_to_contact: String(Boolean(input.consentToContact)),

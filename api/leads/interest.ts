@@ -33,6 +33,8 @@ export default async function handler(req: any, res: any) {
       phone: cleanString(body.phone),
       age: cleanString(body.age),
       gender: cleanString(body.gender),
+      weight: cleanString(body.weight),
+      height: cleanString(body.height),
       primaryGoal,
       notes: cleanString(body.notes),
       consentToContact,
