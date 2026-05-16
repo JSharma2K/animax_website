@@ -847,6 +847,7 @@ function OneOnOneFeatureCard({
   submitState: 'idle' | 'submitting' | 'error';
 }) {
   const Icon = feature.icon;
+  const isFront = cardState === 'front';
   const canSubmit = Boolean(answers.name && answers.email && answers.phone && answers.age && answers.consent);
   const ctaClassName = 'inline-flex items-center gap-2 self-start py-3 text-xs font-normal uppercase leading-none tracking-[0.22em] text-emerald-400 transition-colors hover:text-emerald-300 disabled:cursor-not-allowed disabled:text-emerald-400/40';
   const inputClassName = 'w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none transition-colors focus:border-emerald-400';
@@ -857,10 +858,18 @@ function OneOnOneFeatureCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6, delay: 0.15 }}
-      className="group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-zinc-900/50 shadow-[0_0_42px_rgba(52,211,153,0.12)] transition-colors duration-500 hover:border-emerald-400/60"
+      className={`group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border transition-colors duration-500 ${
+        isFront
+          ? 'border-emerald-400/20 bg-zinc-900/50 shadow-[0_0_42px_rgba(52,211,153,0.12)] hover:border-emerald-400/60'
+          : 'border-white/10 bg-black'
+      }`}
     >
-      <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-br from-emerald-400/20 via-emerald-400/10 to-transparent opacity-70" />
-      <div className="pointer-events-none absolute inset-0 rounded-[2rem] ring-1 ring-inset ring-emerald-400/10" />
+      {isFront ? (
+        <>
+          <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-br from-emerald-400/20 via-emerald-400/10 to-transparent opacity-70" />
+          <div className="pointer-events-none absolute inset-0 rounded-[2rem] ring-1 ring-inset ring-emerald-400/10" />
+        </>
+      ) : null}
       <AnimatePresence mode="wait">
         {cardState === 'front' ? (
           <motion.div
