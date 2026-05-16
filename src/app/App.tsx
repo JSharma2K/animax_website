@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useScroll, useTransform } from 'motion/react';
-import { Play, CheckCircle2, Users2, ArrowRight, PhoneCall, ShieldCheck, Menu, X, Target, CalendarCheck, Flame, TrendingUp, Download } from 'lucide-react';
+import { Play, CheckCircle2, ArrowRight, ShieldCheck, Menu, X, Target, CalendarCheck, Flame, TrendingUp, Download } from 'lucide-react';
+import { IconUserStar, IconUsersPlus } from '@tabler/icons-react';
 import { useEffect, useState, useRef } from 'react';
 import type { ComponentType } from 'react';
 import Lenis from 'lenis';
@@ -168,7 +169,7 @@ export default function App() {
         "Get Animax coach guidance for training and nutrition",
         "Top 3 transformations win an Animax Stack",
       ],
-      icon: Users2,
+      icon: IconUsersPlus,
       img: "https://images.unsplash.com/photo-1770513649465-2c60c8039806?auto=format&fit=crop&q=80&w=1080"
     },
     {
@@ -183,7 +184,7 @@ export default function App() {
         "Supplements",
         "Mental training sessions",
       ],
-      icon: PhoneCall,
+      icon: IconUserStar,
       img: "https://images.unsplash.com/photo-1695892046204-ec2962b26b48?auto=format&fit=crop&q=80&w=1080"
     }
   ];
@@ -275,7 +276,7 @@ export default function App() {
               scrolled ? 'opacity-0 -translate-y-3 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
             }`}>
               <button {...bookingButtonProps} className="group hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400 transition-colors duration-300 hover:text-emerald-300 sm:flex">
-                Book Your Free Call
+                Book Your Free Consult
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </button>
               <button
@@ -310,7 +311,7 @@ export default function App() {
                 ))}
                 <li>
                   <button {...bookingButtonProps} className="mt-2 flex w-full items-center justify-center gap-2 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-400 transition-colors hover:text-emerald-300">
-                    Book Your Free Call
+                    Book Your Free Consult
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </li>
@@ -462,7 +463,7 @@ export default function App() {
               <p className="text-xl text-zinc-400 max-w-2xl mx-auto">More than just a workout plan. We provide a complete ecosystem around your fitness journey to guarantee results.</p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+            <div className="grid max-w-6xl gap-8 mx-auto md:grid-cols-2 md:items-stretch">
               {features.map((feature, idx) =>
                 idx === 1 ? (
                   <OneOnOneFeatureCard
@@ -555,7 +556,7 @@ export default function App() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.6, delay: idx * 0.15 }}
-                    className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-zinc-900/50 transition-colors duration-500 hover:border-emerald-400/60"
+                    className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-zinc-900/50 transition-colors duration-500 hover:border-emerald-400/60 md:h-[46rem]"
                   >
                     <div className="h-64 sm:h-80 relative overflow-hidden shrink-0">
                       <ImageWithFallback
@@ -566,9 +567,7 @@ export default function App() {
                       <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0e] via-zinc-900/40 to-transparent" />
                     </div>
                     <div className="p-8 sm:p-10 flex-grow flex flex-col justify-end bg-gradient-to-b from-[#0d0d0e] to-zinc-900/90">
-                      <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 border border-emerald-500/20">
-                        <feature.icon className="w-7 h-7 text-emerald-400" />
-                      </div>
+                      <feature.icon className="mb-6 h-10 w-10 text-emerald-400" stroke={1.7} />
                       <h3 className="text-3xl font-bold mb-4 text-white">{feature.title}</h3>
                       <p className={`${feature.bullets ? 'mb-4' : 'mb-8'} text-zinc-400 text-lg leading-relaxed`}>{feature.description}</p>
                       {feature.bullets ? (
@@ -633,8 +632,7 @@ export default function App() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-32 px-6 relative overflow-hidden">
-          <div className="absolute inset-0 bg-emerald-950/20" />
+        <section className="py-32 px-6 relative overflow-hidden bg-black">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
@@ -858,7 +856,7 @@ function OneOnOneFeatureCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6, delay: 0.15 }}
-      className={`group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border transition-colors duration-500 ${
+      className={`group relative flex min-h-[40rem] flex-col overflow-hidden rounded-[2rem] border transition-colors duration-500 md:h-[46rem] ${
         isFront
           ? 'border-emerald-400/20 bg-zinc-900/50 shadow-[0_0_42px_rgba(52,211,153,0.12)] hover:border-emerald-400/60'
           : 'border-white/10 bg-black'
@@ -889,9 +887,7 @@ function OneOnOneFeatureCard({
               <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-t from-[#0d0d0e] via-zinc-900/40 to-transparent sm:h-80" />
             </div>
             <div className="flex flex-grow flex-col justify-end bg-gradient-to-b from-[#0d0d0e] to-zinc-900/90 p-8 sm:p-10">
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10">
-                <Icon className="h-7 w-7 text-emerald-400" />
-              </div>
+              <Icon className="mb-6 h-10 w-10 text-emerald-400" stroke={1.7} />
               <h3 className="mb-4 text-3xl font-bold text-white">{feature.title}</h3>
               <p className="mb-4 text-lg leading-relaxed text-zinc-400">{feature.description}</p>
               {feature.bullets ? (
