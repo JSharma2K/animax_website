@@ -138,6 +138,19 @@ export default function App() {
   }, [scrolled]);
 
   useEffect(() => {
+    if (!mobileMenuOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
     const lenis = new Lenis({
       duration: 1.15,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -234,14 +247,56 @@ export default function App() {
         className="fixed left-0 right-0 top-0 z-50 pointer-events-none"
       >
         <div className={`mx-auto pl-2 pr-6 transition-[padding] duration-500 ease-out ${scrolled ? 'max-w-none py-1' : 'max-w-none py-2'}`}>
-          <div className="relative -translate-y-3 flex items-center justify-between">
+          <AnimatePresence>
+            {mobileMenuOpen && !scrolled ? (
+              <motion.div
+                key="mobile-menu"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22 }}
+                className="pointer-events-auto fixed inset-0 z-0 bg-black md:hidden"
+              >
+                <div className="flex h-full flex-col px-6 pb-10 pt-40">
+                  <nav className="border-y border-white/10 py-8">
+                    <ul className="space-y-7">
+                      {navItems.map((item) => (
+                        <li key={item.name}>
+                          <a
+                            href={item.href}
+                            className="block text-2xl font-semibold uppercase tracking-[0.2em] text-white transition-colors hover:text-emerald-300"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {item.name}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </nav>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      openBookingPopup();
+                    }}
+                    className="mt-8 flex items-center gap-3 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-400 transition-colors hover:text-emerald-300"
+                  >
+                    Book Your Free Consult
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          <div className="relative z-10 -translate-y-3 flex items-center justify-between">
             <a
               href="#"
               className={`pointer-events-auto flex items-center group transition-all duration-300 ${
                 scrolled ? 'opacity-0 -translate-y-3 pointer-events-none' : 'opacity-100 translate-y-0'
               }`}
             >
-              <span className="block h-32 w-[204px] shrink-0 overflow-visible">
+              <span className="block h-24 w-[160px] shrink-0 overflow-visible md:h-32 md:w-[204px]">
                 <img
                   src={animaxLogo}
                   alt="Animax Coaching"
@@ -289,35 +344,6 @@ export default function App() {
               </button>
             </div>
           </div>
-
-          {mobileMenuOpen && !scrolled ? (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="pointer-events-auto mt-6 border-t border-white/10 pt-6 pb-6 md:hidden"
-            >
-              <ul className="space-y-4">
-                {navItems.map((item) => (
-                  <li key={item.name}>
-                    <a
-                      href={item.href}
-                      className="block py-2 text-sm uppercase tracking-[0.18em] text-white/80 transition-colors hover:text-white"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      {item.name}
-                    </a>
-                  </li>
-                ))}
-                <li>
-                  <button {...bookingButtonProps} className="mt-2 flex w-full items-center justify-center gap-2 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-400 transition-colors hover:text-emerald-300">
-                    Book Your Free Consult
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </li>
-              </ul>
-            </motion.div>
-          ) : null}
         </div>
       </motion.nav>
 
